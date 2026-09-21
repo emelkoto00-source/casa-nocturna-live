@@ -86,6 +86,8 @@ export class RobloxClient {
     this.operationBase = (env.ROBLOX_OPERATION_BASE_URL || 'https://apis.roblox.com/assets/v1/operations').replace(/\/$/, '');
     this.assetBase = (env.ROBLOX_ASSET_BASE_URL || 'https://apis.roblox.com/assets/v1/assets').replace(/\/$/, '');
     this.statusUrlTemplate = env.ROBLOX_MODERATION_STATUS_URL_TEMPLATE || '';
+    this.assetPermissionsBase = (env.ROBLOX_ASSET_PERMISSIONS_BASE_URL || 'https://apis.roblox.com/asset-permissions-api/v1/assets').replace(/\/$/, '');
+    this.casaUniverseId = String(env.CASA_UNIVERSE_ID || '').trim();
     this.simulate = String(env.SIMULATE_ROBLOX || '').toLowerCase() === 'true';
   }
 
@@ -155,6 +157,51 @@ export class RobloxClient {
       await sleep(2000);
     }
     throw new Error('Timed out waiting for Roblox asset creation.');
+  }
+
+  async grantUniverseUsePermission(assetId, universeId = this.casaUniverseId) {
+    if (this.simulate) {
+      return { ok: true, simulated: true, status: 200 };
+    }
+    if (!this.key) throw new Error('ROBLOX_API_KEY is missing.');
+    if (!assetId) throw new Error('Cannot grant Casa access: asset ID is missing.');
+    if (!universeId) throw new Error('CASA_UNIVERSE_ID is missing.');
+
+    const url = `${this.assetPermissionsBase}/${encodeURIComponent(assetId)}/permissions`;
+    const body = {
+      requests: [
+        {
+          subjectType: 'Universe',
+          subjectId: String(universeId),
+          action: 'Use'
+        }
+      ],
+      enableDeepAccessCheck: false,
+      grantToDependencies: true
+    };
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'x-api-key': this.key,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const text = await res.text();
+    let data = {};
+    if (text) {
+      try { data = JSON.parse(text); }
+      catch { data = { raw: text }; }
+    }
+
+    if (!res.ok) {
+      const detail = data?.message || data?.error || data?.errors?.[0]?.message || text;
+      throw new Error(`Roblox asset permission failed (${res.status})${detail ? `: ${detail}` : '.'}`);
+    }
+
+    return { ok: true, status: res.status, data };
   }
 
   async fetchModerationDocument(assetId, operationId) {

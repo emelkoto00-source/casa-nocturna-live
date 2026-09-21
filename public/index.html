@@ -504,7 +504,9 @@ function noteFor(j){
   switch (j.stage) {
     case "uploading": return `Sending file to the server… ${Math.round((j.progress || 0) * 100)}%`;
     case "processing": return `Converting at ${Number(j.conversionSpeed || (1 / j.speed)).toFixed(1)}×; game playback will be ${Number(j.speed || 1).toFixed(6)}×.`;
-    case "moderating": return "Uploaded to Roblox. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.";\n    case "granting_access": return "Approved by Roblox. Giving Casa Nocturna permission to use the audio…";\n    case "access_required": return j.error ? `Approved, but Casa access is not granted yet. Retrying automatically: ${j.error}` : "Approved, but Casa access is not granted yet. Retrying automatically.";
+    case "moderating": return "Uploaded to Roblox. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.";
+    case "granting_access": return "Approved by Roblox. Giving Casa Nocturna permission to use the audio…";
+    case "access_required": return j.error ? `Approved, but Casa access is not granted yet. Retrying automatically: ${j.error}` : "Approved, but Casa access is not granted yet. Retrying automatically.";
     case "in_map": return "Approved by Roblox and added to the live library.";
     case "approved": return "Approved by Roblox. Not added to the map, so copy the IDs if you need them.";
     case "accepted": return "Approved by Roblox. Not added to the map, so copy the IDs if you need them.";

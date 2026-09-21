@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Casa Nocturna music desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --plum:#171021; --velvet:#221830; --velvet-2:#2c2040; --line:#3d2f55; --line-2:#54446f;
+  --ink:#f3ecf7; --ink-2:#bfb2cf; --ink-3:#8c7ea0;
+  --gold:#f2b84b; --gold-ink:#2a1a02; --gold-soft:rgba(242,184,75,.14);
+  --ok:#6fd3b0; --ok-soft:rgba(111,211,176,.14);
+  --wait:#f2b84b; --bad:#ef7a9a; --bad-soft:rgba(239,122,154,.14);
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Instrument Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r-sm:6px; --r:10px; --r-lg:18px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--plum);color:var(--ink);font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+/* top bar */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:rgba(23,16,33,.92);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:20px;min-height:64px;flex-wrap:wrap}
+.brand{font-family:var(--display);font-weight:700;font-size:1.2rem;letter-spacing:-.01em;margin-right:auto}
+.brand small{display:block;font:500 .78rem var(--body);color:var(--ink-3);letter-spacing:0}
+nav.tabs{display:flex;gap:4px;background:var(--velvet);padding:4px;border-radius:999px;border:1px solid var(--line)}
+nav.tabs button{background:none;border:0;padding:7px 16px;border-radius:999px;color:var(--ink-2);cursor:pointer;font-weight:500}
+nav.tabs button[aria-selected="true"]{background:var(--gold);color:var(--gold-ink)}
+.conn{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--ink-2);background:none;border:1px solid var(--line);padding:6px 12px;border-radius:999px;cursor:pointer}
+.conn i{width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
+.conn.live i{background:var(--ok)} .conn.demo i{background:var(--gold)} .conn.off i{background:var(--bad)}
+
+@media (max-width:600px){header.top{position:static}.top .wrap{gap:10px;padding-top:10px;padding-bottom:10px}}
+.banner{margin:18px 0 0;padding:12px 16px;border-radius:var(--r);background:var(--gold-soft);border:1px solid rgba(242,184,75,.35);color:#f7d9a0;font-size:.92rem}
+.banner[hidden]{display:none}
+
+main.wrap{padding-top:28px;padding-bottom:64px}
+.view[hidden]{display:none}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(1.9rem,4vw,2.8rem);line-height:1.05;letter-spacing:-.025em;margin:0 0 8px}
+.lede{color:var(--ink-2);margin:0 0 28px;max-width:62ch}
+h2{font-family:var(--display);font-weight:500;font-size:1.25rem;letter-spacing:-.01em;margin:0 0 4px}
+.sub{color:var(--ink-3);font-size:.9rem;margin:0 0 16px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:28px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--velvet);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px}
+
+/* drop zone */
+.drop{position:relative;display:grid;place-items:center;align-content:center;text-align:center;gap:6px;min-height:190px;padding:28px;border:1.5px dashed var(--line-2);border-radius:var(--r);background:
+  repeating-radial-gradient(circle at 50% 50%,transparent 0 13px,rgba(255,255,255,.018) 13px 14px);cursor:pointer;transition:border-color .15s,background-color .15s}
+.drop:hover,.drop.over{border-color:var(--gold);background-color:var(--gold-soft)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop strong{font-family:var(--display);font-size:1.2rem;font-weight:500}
+.drop span{color:var(--ink-3);font-size:.88rem}
+
+.defaults{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:18px 0 6px}
+label.f{display:grid;gap:5px;font-size:.82rem;color:var(--ink-2)}
+.inp,select.inp{width:100%;background:var(--plum);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 10px;font-size:.93rem;min-width:0}
+.inp:focus{border-color:var(--gold);outline:none}
+.check{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(--ink-2);margin:14px 0 0}
+.check input{accent-color:var(--gold);width:17px;height:17px}
+
+/* staged files */
+.staged{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:10px}
+.staged li{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--plum)}
+.srow1{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.srow1 .inp{flex:1}
+.fname{font-size:.78rem;color:var(--ink-3);margin:-4px 0 8px;overflow-wrap:anywhere}
+.srow2{display:grid;grid-template-columns:90px 1fr 1fr;gap:8px}
+@media (max-width:720px){.defaults{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.srow2{grid-template-columns:1fr 1fr}.srow2 .speed{grid-column:1/-1}.defaults{grid-template-columns:1fr}}
+.x{background:none;border:1px solid var(--line);border-radius:var(--r-sm);width:36px;height:36px;cursor:pointer;color:var(--ink-3);flex:none}
+.x:hover{color:var(--bad);border-color:var(--bad)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:11px 22px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--gold);color:var(--gold-ink)}
+.btn.primary:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:none;border:1px solid var(--line-2);color:var(--ink)}
+.btn.ghost:hover{border-color:var(--ink-2)}
+.btn.sm{padding:6px 12px;font-size:.84rem;font-weight:500}
+.actions{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.hint{font-size:.84rem;color:var(--ink-3)}
+.err{color:var(--bad);font-size:.86rem;margin:10px 0 0;min-height:1em}
+.playback{display:block;margin-top:4px;color:var(--ok);font-size:.76rem;font-variant-numeric:tabular-nums}.preset-note{margin:12px 0 0;padding:10px 12px;border-radius:var(--r-sm);border:1px solid var(--line);background:rgba(255,255,255,.025);color:var(--ink-2);font-size:.84rem}.preset-note b{color:var(--ink)}
+
+/* queue */
+.queue{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.job{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--plum)}
+.job.rejected,.job.failed{border-color:rgba(239,122,154,.45)}
+.jhead{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.jtitle{font-weight:600;overflow-wrap:anywhere}
+.jmeta{font-size:.8rem;color:var(--ink-3)}
+.stages{display:flex;justify-content:space-between;margin:14px 8px 30px;position:relative;height:16px}
+.stages::before{content:"";position:absolute;left:0;right:0;top:7px;height:2px;background:var(--line)}
+.stages .fill{position:absolute;left:0;top:7px;height:2px;background:var(--gold);transition:width .4s ease}
+.stage{position:relative;width:16px;height:16px;font-size:.74rem;color:var(--ink-3)}
+.stage span{position:absolute;top:22px;left:50%;transform:translateX(-50%);white-space:nowrap}
+.stage:first-child span{left:-8px;transform:none}
+.stage:last-child span{left:auto;right:-8px;transform:none}
+.stage b{width:16px;height:16px;border-radius:50%;background:var(--plum);border:2px solid var(--line-2);display:block;position:relative}
+.stage.done b{background:var(--gold);border-color:var(--gold)}
+.stage.now b{border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft)}
+.stage.done,.stage.now{color:var(--ink-2)}
+.stage.bad b{background:var(--bad);border-color:var(--bad)} .stage.bad{color:var(--bad)}
+@media (prefers-reduced-motion:no-preference){.stage.now b{animation:pulse 1.4s ease-in-out infinite}}
+@keyframes pulse{50%{box-shadow:0 0 0 7px rgba(242,184,75,.05)}}
+.jnote{font-size:.85rem;color:var(--ink-2);margin:8px 0 0}
+.jnote.bad{color:var(--bad)}
+.parts{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.parts li{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.84rem;background:var(--velvet);border-radius:var(--r-sm);padding:6px 6px 6px 10px}
+.parts code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;color:var(--ink-2);overflow-wrap:anywhere}
+.pill{font-size:.72rem;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.wait{background:var(--gold-soft);color:var(--gold)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:28px;text-align:center;color:var(--ink-3);font-size:.92rem}
+
+/* library */
+.libtools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.libtools .inp{max-width:320px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.chip{background:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:.84rem;color:var(--ink-2);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--plum);border-color:var(--ink)}
+.chip .n{opacity:.6;margin-left:4px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:640px}
+th{text-align:left;font-weight:500;color:var(--ink-3);font-size:.8rem;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--velvet)}
+td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.t{font-weight:600} td.g{color:var(--ink-2)} td.ids code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;color:var(--ink-3)}
+td.act{text-align:right;white-space:nowrap}
+.count{color:var(--ink-3);font-size:.88rem;margin-left:auto}
+
+dialog{background:var(--velvet);color:var(--ink);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:24px;width:min(460px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(10,6,16,.7)}
+dialog form{display:grid;gap:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--plum);padding:10px 18px;border-radius:999px;font-weight:500;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">Casa Nocturna<small>Music desk</small></div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" aria-selected="true" data-view="add">Add songs</button>
+      <button role="tab" aria-selected="false" data-view="library">Library</button>
+    </nav>
+    <button class="conn" id="conn" type="button" title="Connection settings"><i></i><span>Checking server…</span></button>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="banner" id="demoBanner" hidden></p>
+</div>
+
+<main class="wrap">
+  <section class="view" id="view-add">
+    <h1>Drop a track, it lands in the club.</h1>
+    <p class="lede">Songs upload to Roblox, wait for moderation, then join Casa Nocturna's music library on their own. No Studio, no republish.</p>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>New songs</h2>
+        <p class="sub">Up to 5 at a time. Audio or video files; video is converted to audio on the server.</p>
+
+        <label class="drop" id="drop">
+          <input type="file" id="file" multiple accept="audio/*,video/*,.mp3,.wav,.ogg,.flac,.m4a,.mp4,.mov,.webm">
+          <strong>Drop files here</strong>
+          <span>or click to choose · MP3, WAV, OGG, FLAC, M4A, MP4, MOV</span>
+        </label>
+
+        <div class="defaults">
+          <label class="f">Genre for new files
+            <select class="inp" id="defGenre"></select>
+          </label>
+          <label class="f">Sub-playlist
+            <select class="inp" id="defSub"></select>
+          </label>
+          <label class="f">Conversion preset
+            <select class="inp" id="defConvert">
+              <option value="2.1">2.1×</option>
+              <option value="2.3" selected>2.3×</option>
+              <option value="2.6">2.6×</option>
+              <option value="2.7">2.7×</option>
+              <option value="2.9">2.9×</option>
+            </select>
+            <span class="playback" id="defPlayback">In-game: 0.434783×</span>
+          </label>
+        </div>
+        <p class="preset-note"><b>Speed mapping:</b> the server creates the selected converted copy and stores the inverse playback speed for the game. Example: 2.3× conversion → 0.434783× in-game playback.</p>
+
+        <ul class="staged" id="staged"></ul>
+
+        <label class="check"><input type="checkbox" id="pushToMap" checked> Add to the map automatically once Roblox accepts it</label>
+
+        <div class="actions">
+          <button class="btn primary" id="uploadBtn" disabled>Upload songs</button>
+          <span class="hint" id="stagedHint">No files chosen yet.</span>
+        </div>
+        <p class="err" id="uploadErr" role="alert"></p>
+      </div>
+
+      <div>
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px">
+          <h2 style="margin:0">Upload queue</h2>
+          <button class="btn ghost sm" id="clearDone" style="margin-left:auto">Clear finished</button>
+        </div>
+        <ul class="queue" id="queue"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-library" hidden>
+    <h1>Library</h1>
+    <p class="lede">Everything the live music system loads from the website. Conversion speed is stored alongside the inverse in-game playback speed used by your existing music system.</p>
+    <div class="libtools">
+      <input class="inp" id="search" type="search" placeholder="Search titles or asset IDs" aria-label="Search library">
+      <span class="count" id="libCount"></span>
+    </div>
+    <div class="chips" id="genreChips"></div>
+    <div id="libBody"></div>
+  </section>
+</main>
+
+<dialog id="editDlg">
+  <form method="dialog" id="editForm">
+    <h2>Edit song</h2>
+    <label class="f">Title <input class="inp" name="title" required maxlength="80"></label>
+    <div class="two">
+      <label class="f">Genre <select class="inp" name="genre"></select></label>
+      <label class="f">Sub-playlist <select class="inp" name="sub"></select></label>
+    </div>
+    <label class="f">In-game playback speed <input class="inp" name="speed" type="number" min="0.01" max="2" step="0.000001" required><span class="playback">This is the value your PlaylistModule uses.</span></label>
+    <p class="err" id="editErr"></p>
+    <div class="actions" style="margin-top:0">
+      <button class="btn primary" value="save">Save changes</button>
+      <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="connDlg">
+  <form method="dialog" id="connForm">
+    <h2>Server connection</h2>
+    <p class="sub" style="margin:0">The admin password is the one you set as <code>ADMIN_PASSWORD</code> on your server. It stays in this browser only.</p>
+    <label class="f">Admin password <input class="inp" name="key" type="password" autocomplete="current-password"></label>
+    <p class="hint" id="connInfo"></p>
+    <div class="actions" style="margin-top:0">
+      <button class="btn primary" value="save">Save and reconnect</button>
+      <button class="btn ghost" value="cancel" formnovalidate>Close</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+<script>
+(() => {
+"use strict";
+let GENRES = {
+  "West Coast": ["The Hood", "Pop", "R&B"],
+  "Young Stunna": ["Tambay Kalye", "OPM Daily", "Sugbo Trip"],
+  "Jejemons": [],
+  "Casa Floor": ["Dance Pop", "Rave Mix", "Disco"],
+  "KPOP": ["K-Pop", "Latin"]
+};
+const MAX_FILES = 5, MAX_MB = 200;
+const CONVERSION_SPEEDS = [2.1, 2.3, 2.6, 2.7, 2.9];
+const inverseSpeed = v => 1 / Number(v);
+const playbackText = v => inverseSpeed(v).toFixed(6);
+const conversionOptions = sel => CONVERSION_SPEEDS.map(v => `<option value="${v}"${Number(sel) === v ? " selected" : ""}>${v.toFixed(1)}×</option>`).join("");
+const STAGES = ["uploading", "processing", "moderating", "in_map"];
+const FINAL = new Set(["in_map", "accepted", "rejected", "failed"]);
+const $ = (s, r = document) => r.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+};
+
+const state = { mode: "checking", info: null, staged: [], jobs: [], library: [], genreFilter: "All", search: "" };
+let uid = 0, pollTimer = null;
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); }
+async function copy(text, msg){ try { await navigator.clipboard.writeText(text); toast(msg); } catch { toast("Couldn't copy. Select the text and copy it manually."); } }
+
+/* ---------- API (real server or preview simulation) ---------- */
+function headers(){ const k = store.get("nocturna.adminKey"); return k ? { Authorization: "Bearer " + k } : {}; }
+async function api(path, opts = {}){
+  if (state.mode === "demo") return demo.handle(path, opts);
+  const res = await fetch(path, { ...opts, headers: { ...headers(), ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) } });
+  if (res.status === 401) { setConn("off", "Password needed"); openConn(); throw new Error("The server rejected the admin password. Enter it in Server connection."); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+  return data;
+}
+function uploadFile(item, onProgress){
+  const fd = new FormData();
+  fd.append("file", item.file); fd.append("title", item.title); fd.append("conversionSpeed", item.conversionSpeed); fd.append("speed", item.speed);
+  fd.append("genre", item.genre); fd.append("sub", item.sub); fd.append("pushToMap", $("#pushToMap").checked ? "1" : "0");
+  if (state.mode === "demo") return demo.upload(item, $("#pushToMap").checked, onProgress);
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", "/api/uploads");
+    Object.entries(headers()).forEach(([k, v]) => x.setRequestHeader(k, v));
+    x.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded / e.total);
+    x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {}
+      if (x.status === 401) { openConn(); return reject(new Error("Admin password needed.")); }
+      x.status < 300 ? resolve(d) : reject(new Error(d.error || `Upload failed (${x.status})`)); };
+    x.onerror = () => reject(new Error("Lost connection to the server during upload."));
+    x.send(fd);
+  });
+}
+
+/* ---------- preview simulation ---------- */
+const demo = {
+  jobs: [], lib: [
+    { id: "s1", title: "Sample track", genre: "Casa Floor", sub: "Rave Mix", conversionSpeed: 2.3, speed: inverseSpeed(2.3), assetIds: ["100000000000001"], addedAt: Date.now() - 864e5 },
+    { id: "s2", title: "Sample long mix", genre: "West Coast", sub: "The Hood", conversionSpeed: 2.7, speed: inverseSpeed(2.7), assetIds: ["100000000000002", "100000000000003"], addedAt: Date.now() - 1728e5 }
+  ],
+  fakeId(){ return String(Math.floor(1e14 + Math.random() * 9e14)); },
+  async handle(path, opts){
+    await new Promise(r => setTimeout(r, 120));
+    const m = (opts.method || "GET").toUpperCase();
+    if (path === "/api/health") return { ok: true, genres: GENRES, placeName: "Casa Nocturna (preview)" };
+    if (path === "/api/jobs") return { jobs: this.jobs };
+    if (path === "/api/library") return { songs: this.lib };
+    const lm = path.match(/^\/api\/library\/(.+)$/);
+    if (lm && m === "PATCH") { const s = this.lib.find(x => x.id === lm[1]); Object.assign(s, JSON.parse(opts.body)); return { song: s }; }
+    if (lm && m === "DELETE") { this.lib = this.lib.filter(x => x.id !== lm[1]); return { ok: true }; }
+    if (path === "/api/jobs/clear" && m === "POST") { this.jobs = this.jobs.filter(j => !FINAL.has(j.stage)); return { ok: true }; }
+    throw new Error("Not available in preview");
+  },
+  upload(item, push, onProgress){
+    return new Promise(resolve => {
+      let p = 0; const t = setInterval(() => { p = Math.min(1, p + .2); onProgress(p); if (p >= 1) { clearInterval(t); done(); } }, 180);
+      const done = () => {
+        const nParts = item.file.size > 12e6 ? 2 : 1;
+        const job = { id: "j" + Date.now() + Math.random().toString(36).slice(2, 6), title: item.title, genre: item.genre, sub: item.sub, conversionSpeed: item.conversionSpeed, speed: item.speed, pushToMap: push, stage: "processing", parts: [], createdAt: Date.now() };
+        this.jobs.unshift(job); resolve({ job });
+        const rejected = /reject/i.test(item.file.name);
+        setTimeout(() => { job.stage = "moderating"; job.parts = Array.from({ length: nParts }, (_, i) => ({ index: i + 1, assetId: this.fakeId(), status: "pending" })); }, 1600);
+        setTimeout(() => {
+          if (rejected) { job.stage = "rejected"; job.parts.forEach(p => p.status = "rejected"); job.error = "Roblox moderation rejected this audio."; return; }
+          job.parts.forEach(p => p.status = "accepted"); job.stage = push ? "in_map" : "accepted";
+          if (push) this.lib.unshift({ id: "s" + Date.now(), title: job.title, genre: job.genre, sub: job.sub, conversionSpeed: job.conversionSpeed, speed: job.speed, assetIds: job.parts.map(p => p.assetId), addedAt: Date.now() });
+        }, 5200);
+      };
+    });
+  }
+};
+
+/* ---------- connection ---------- */
+function setConn(kind, text){ const c = $("#conn"); c.className = "conn " + kind; c.querySelector("span").textContent = text; }
+async function connect(){
+  setConn("", "Checking server…");
+  try {
+    const r = await fetch("/api/health", { headers: headers() });
+    const ct = r.headers.get("content-type") || "";
+    if (!ct.includes("json")) throw new Error("no api");
+    const d = await r.json();
+    state.mode = "live"; state.info = d; if (d.genres) GENRES = d.genres;
+    setConn("live", d.placeName ? "Connected to " + d.placeName : "Connected");
+    const banner = $("#demoBanner");
+    if (d.simulation) { banner.textContent = "Server is connected in simulation mode. Audio is processed, but fake Roblox asset IDs are generated until SIMULATE_ROBLOX=false."; banner.hidden = false; }
+    else if (!d.robloxConfigured) { banner.textContent = "Server is live, but Roblox Open Cloud is not configured yet. Add ROBLOX_API_KEY and creator settings to your server environment."; banner.hidden = false; }
+    else { banner.hidden = true; }
+  } catch {
+    state.mode = "off"; state.info = null;
+    setConn("off", "Server offline");
+    const banner = $("#demoBanner"); banner.textContent = "The webpage loaded, but the backend API is not reachable. Start/deploy the Node server, then reconnect."; banner.hidden = false;
+    fillGenreSelects(); renderQueue(); renderLibrary(); return;
+  }
+  fillGenreSelects();
+  await Promise.all([refreshJobs(), refreshLibrary()]);
+  schedulePoll();
+}
+function openConn(){
+  const d = $("#connDlg"); if (d.open) return;
+  $("#connInfo").textContent = state.info?.placeName ? "Server: " + state.info.placeName : "Enter the ADMIN_PASSWORD configured on your server.";
+  d.querySelector("[name=key]").value = store.get("nocturna.adminKey") || "";
+  d.showModal();
+}
+$("#conn").addEventListener("click", openConn);
+$("#connDlg").addEventListener("close", () => { if ($("#connDlg").returnValue === "save") { store.set("nocturna.adminKey", $("#connForm").key.value.trim() || null); connect(); } });
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-" + b.dataset.view);
+  if (b.dataset.view === "library") refreshLibrary();
+}));
+
+/* ---------- genre selects ---------- */
+function genreOptions(sel){ return Object.keys(GENRES).map(g => `<option${g === sel ? " selected" : ""}>${esc(g)}</option>`).join(""); }
+function subOptions(genre, sel){ const subs = GENRES[genre] || []; return `<option value="">${subs.length ? "None" : "No sub-playlists"}</option>` + subs.map(s => `<option${s === sel ? " selected" : ""}>${esc(s)}</option>`).join(""); }
+function fillGenreSelects(){
+  const g = $("#defGenre"), s = $("#defSub");
+  const cur = store.get("nocturna.defGenre"); const genre = GENRES[cur] ? cur : Object.keys(GENRES)[0];
+  g.innerHTML = genreOptions(genre); s.innerHTML = subOptions(genre, store.get("nocturna.defSub"));
+}
+$("#defGenre").addEventListener("change", e => { store.set("nocturna.defGenre", e.target.value); $("#defSub").innerHTML = subOptions(e.target.value, ""); store.set("nocturna.defSub", ""); });
+$("#defSub").addEventListener("change", e => store.set("nocturna.defSub", e.target.value));
+function syncDefaultPlayback(){ $("#defPlayback").textContent = `In-game: ${playbackText($("#defConvert").value)}×`; }
+$("#defConvert").addEventListener("change", syncDefaultPlayback);
+
+/* ---------- staging files ---------- */
+function titleFromName(n){ return n.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Untitled"; }
+function addFiles(list){
+  $("#uploadErr").textContent = "";
+  const skipped = [];
+  for (const f of list) {
+    if (state.staged.length >= MAX_FILES) { skipped.push(`${f.name} (limit is ${MAX_FILES} at a time)`); continue; }
+    if (!/^(audio|video)\//.test(f.type) && !/\.(mp3|wav|ogg|flac|m4a|mp4|mov|webm)$/i.test(f.name)) { skipped.push(`${f.name} (not audio or video)`); continue; }
+    if (f.size > MAX_MB * 1e6) { skipped.push(`${f.name} (over ${MAX_MB} MB)`); continue; }
+    const conversionSpeed = Number($("#defConvert").value || 2.3);
+    state.staged.push({ uid: ++uid, file: f, title: titleFromName(f.name), conversionSpeed, speed: inverseSpeed(conversionSpeed), genre: $("#defGenre").value, sub: $("#defSub").value });
+  }
+  if (skipped.length) $("#uploadErr").textContent = "Skipped: " + skipped.join("; ");
+  renderStaged();
+}
+function renderStaged(){
+  const ul = $("#staged");
+  ul.innerHTML = state.staged.map(it => `
+    <li data-uid="${it.uid}">
+      <div class="srow1">
+        <input class="inp" data-k="title" value="${esc(it.title)}" maxlength="80" aria-label="Song title">
+        <button class="x" data-rm aria-label="Remove ${esc(it.title)}">✕</button>
+      </div>
+      <p class="fname">${esc(it.file.name)} · ${(it.file.size / 1e6).toFixed(1)} MB</p>
+      <div class="srow2">
+        <label class="f speed">Conversion <select class="inp" data-k="conversionSpeed">${conversionOptions(it.conversionSpeed)}</select><span class="playback">In-game ${Number(it.speed).toFixed(6)}×</span></label>
+        <label class="f">Genre <select class="inp" data-k="genre">${genreOptions(it.genre)}</select></label>
+        <label class="f">Sub-playlist <select class="inp" data-k="sub">${subOptions(it.genre, it.sub)}</select></label>
+      </div>
+    </li>`).join("");
+  const n = state.staged.length;
+  $("#uploadBtn").disabled = n === 0;
+  $("#uploadBtn").textContent = n > 1 ? `Upload ${n} songs` : "Upload song";
+  $("#stagedHint").textContent = n ? `${n} of ${MAX_FILES} ready. Long tracks are split into parts automatically.` : "No files chosen yet.";
+}
+$("#staged").addEventListener("input", e => {
+  const li = e.target.closest("li"), k = e.target.dataset.k; if (!li || !k) return;
+  const it = state.staged.find(x => x.uid == li.dataset.uid);
+  it[k] = k === "conversionSpeed" ? Number(e.target.value) : e.target.value;
+  if (k === "conversionSpeed") { it.speed = inverseSpeed(it.conversionSpeed); const p = li.querySelector(".playback"); if (p) p.textContent = `In-game ${it.speed.toFixed(6)}×`; }
+  if (k === "genre") { it.sub = ""; li.querySelector("[data-k=sub]").innerHTML = subOptions(it.genre, ""); }
+});
+$("#staged").addEventListener("click", e => {
+  if (!e.target.closest("[data-rm]")) return;
+  const li = e.target.closest("li"); state.staged = state.staged.filter(x => x.uid != li.dataset.uid); renderStaged();
+});
+const drop = $("#drop");
+$("#file").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => addFiles(e.dataTransfer.files));
+
+/* ---------- uploading ---------- */
+function validSpeed(v){ const n = Number(v); return Number.isFinite(n) && n >= 0.01 && n <= 2; }
+function validConversion(v){ return CONVERSION_SPEEDS.includes(Number(v)); }
+$("#uploadBtn").addEventListener("click", async () => {
+  const err = $("#uploadErr"); err.textContent = "";
+  const bad = state.staged.find(it => !it.title.trim() || !validConversion(it.conversionSpeed) || !validSpeed(it.speed));
+  if (bad) { err.textContent = !bad.title.trim() ? "Every song needs a title." : `Choose one of the supported conversion presets for "${bad.title}".`; return; }
+  const batch = state.staged.map(it => ({ ...it, title: it.title.trim(), conversionSpeed: Number(it.conversionSpeed), speed: inverseSpeed(it.conversionSpeed) }));
+  state.staged = []; renderStaged();
+  const btn = $("#uploadBtn"); btn.disabled = true;
+  for (const it of batch) {
+    const local = { id: "local-" + it.uid, title: it.title, genre: it.genre, sub: it.sub, stage: "uploading", progress: 0, parts: [], local: true };
+    state.jobs.unshift(local); renderQueue();
+    try {
+      await uploadFile(it, p => { local.progress = p; renderQueue(); });
+      state.jobs = state.jobs.filter(j => j !== local);
+      await refreshJobs();
+    } catch (e) {
+      local.stage = "failed"; local.error = e.message; renderQueue();
+    }
+  }
+  schedulePoll(true);
+});
+
+/* ---------- queue ---------- */
+function stageIndex(j){ return j.stage === "accepted" ? 3 : j.stage === "rejected" ? 2 : Math.max(0, STAGES.indexOf(j.stage)); }
+function luaFor(j){
+  const ok = (j.parts || []).filter(p => p.status === "accepted"); const n = ok.length;
+  return ok.map(p => `\t{ id = ${p.assetId}, title = ${JSON.stringify(n > 1 ? `${j.title} (${p.index}/${n})` : j.title)}, speed = ${Number(j.speed ?? 1).toFixed(6)}, genre = ${JSON.stringify(j.genre)}${j.sub ? `, sub = ${JSON.stringify(j.sub)}` : ""} }, -- converted ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}x`).join("\n");
+}
+function noteFor(j){
+  switch (j.stage) {
+    case "uploading": return `Sending file to the server… ${Math.round((j.progress || 0) * 100)}%`;
+    case "processing": return `Converting at ${Number(j.conversionSpeed || (1 / j.speed)).toFixed(1)}×; game playback will be ${Number(j.speed || 1).toFixed(6)}×.`;
+    case "moderating": return "Waiting for Roblox moderation. This usually takes a few minutes.";
+    case "in_map": return "In the library. Live servers picked it up.";
+    case "accepted": return "Accepted by Roblox. Not added to the map, so copy the IDs if you need them.";
+    case "rejected": return j.error || "Roblox moderation rejected this audio. It was not added to the map.";
+    case "failed": return j.error || "Something went wrong. Check the server log.";
+  }
+  return "";
+}
+function renderQueue(){
+  const ul = $("#queue");
+  if (!state.jobs.length) { ul.innerHTML = `<li class="empty">Uploads show up here with their moderation status.</li>`; return; }
+  ul.innerHTML = state.jobs.map(j => {
+    const idx = stageIndex(j), bad = j.stage === "rejected" || j.stage === "failed", finished = j.stage === "in_map" || j.stage === "accepted";
+    const labels = ["Upload", "Split", "Moderation", j.pushToMap === false ? "Done" : "In map"];
+    const fillPct = finished ? 100 : (idx / 3) * 100;
+    const stages = labels.map((l, i) => {
+      let c = i < idx || (finished && i === 3) ? "done" : i === idx ? (bad ? "bad" : "now") : "";
+      return `<div class="stage ${c}"><b></b><span>${l}</span></div>`;
+    }).join("");
+    const parts = (j.parts || []).map(p => `<li><code>rbxassetid://${esc(p.assetId)}</code>${j.parts.length > 1 ? `<span class="jmeta">Part ${p.index}</span>` : ""}<span class="pill ${p.status === "accepted" ? "ok" : p.status === "rejected" ? "bad" : "wait"}">${p.status === "accepted" ? "Accepted" : p.status === "rejected" ? "Rejected" : "Pending"}</span></li>`).join("");
+    const hasLua = (j.parts || []).some(p => p.status === "accepted");
+    return `<li class="job ${j.stage}" data-id="${esc(j.id)}">
+      <div class="jhead"><span class="jtitle">${esc(j.title)}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× game · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
+      <div class="stages"><div class="fill" style="width:${fillPct}%"></div>${stages}</div>
+      <p class="jnote${bad ? " bad" : ""}">${esc(noteFor(j))}</p>
+      ${parts ? `<ul class="parts">${parts}</ul>` : ""}
+      ${hasLua ? `<div class="actions" style="margin-top:10px"><button class="btn ghost sm" data-copyids>Copy asset IDs</button><button class="btn ghost sm" data-copylua>Copy as Lua</button></div>` : ""}
+    </li>`;
+  }).join("");
+}
+$("#queue").addEventListener("click", e => {
+  const li = e.target.closest(".job"); if (!li) return; const j = state.jobs.find(x => x.id === li.dataset.id); if (!j) return;
+  if (e.target.closest("[data-copyids]")) copy(j.parts.filter(p => p.status === "accepted").map(p => p.assetId).join("\n"), "Asset IDs copied");
+  if (e.target.closest("[data-copylua]")) copy(luaFor(j), "Lua entries copied");
+});
+$("#clearDone").addEventListener("click", async () => {
+  try { await api("/api/jobs/clear", { method: "POST" }); } catch {}
+  state.jobs = state.jobs.filter(j => !FINAL.has(j.stage) || (j.local && j.stage !== "failed")); await refreshJobs();
+});
+async function refreshJobs(){
+  try {
+    const { jobs = [] } = await api("/api/jobs");
+    const locals = state.jobs.filter(j => j.local);
+    const hadInMap = new Set(state.jobs.filter(j => j.stage === "in_map").map(j => j.id));
+    state.jobs = [...locals, ...jobs];
+    if (jobs.some(j => j.stage === "in_map" && !hadInMap.has(j.id))) refreshLibrary();
+  } catch {}
+  renderQueue();
+}
+function schedulePoll(){
+  clearTimeout(pollTimer);
+  const busy = state.jobs.some(j => !FINAL.has(j.stage));
+  pollTimer = setTimeout(async () => { await refreshJobs(); schedulePoll(); }, busy ? 2500 : 15000);
+}
+
+/* ---------- library ---------- */
+async function refreshLibrary(){
+  try { const { songs = [] } = await api("/api/library"); state.library = songs; } catch (e) { $("#libBody").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  renderLibrary();
+}
+function renderLibrary(){
+  const counts = { All: state.library.length }; state.library.forEach(s => counts[s.genre] = (counts[s.genre] || 0) + 1);
+  const genres = ["All", ...Object.keys(GENRES)];
+  if (!genres.includes(state.genreFilter)) state.genreFilter = "All";
+  $("#genreChips").innerHTML = genres.map(g => `<button class="chip" aria-pressed="${g === state.genreFilter}" data-g="${esc(g)}">${esc(g)}<span class="n">${counts[g] || 0}</span></button>`).join("");
+  const q = state.search.toLowerCase();
+  const rows = state.library.filter(s => (state.genreFilter === "All" || s.genre === state.genreFilter) && (!q || s.title.toLowerCase().includes(q) || (s.assetIds || []).some(id => String(id).includes(q))));
+  $("#libCount").textContent = `${rows.length} of ${state.library.length} songs`;
+  if (!state.library.length) { $("#libBody").innerHTML = `<div class="empty">No songs added from the website yet. Upload one from Add songs and it appears here once Roblox accepts it.</div>`; return; }
+  if (!rows.length) { $("#libBody").innerHTML = `<div class="empty">Nothing matches that search.</div>`; return; }
+  $("#libBody").innerHTML = `<div class="tablewrap"><table>
+    <thead><tr><th>Title</th><th>Genre</th><th>Convert</th><th>In-game</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
+    <tbody>${rows.map(s => `<tr data-id="${esc(s.id)}">
+      <td class="t">${esc(s.title)}</td>
+      <td class="g">${esc(s.genre)}${s.sub ? " / " + esc(s.sub) : ""}</td>
+      <td>${Number(s.conversionSpeed || (1 / Number(s.speed || 1))).toFixed(1)}×</td>
+      <td>${Number(s.speed).toFixed(6)}×</td>
+      <td class="ids">${(s.assetIds || []).map(id => `<code>${esc(id)}</code>`).join("<br>")}</td>
+      <td class="act"><button class="btn ghost sm" data-edit>Edit</button> <button class="btn ghost sm" data-del>Remove</button></td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+$("#genreChips").addEventListener("click", e => { const b = e.target.closest("[data-g]"); if (b) { state.genreFilter = b.dataset.g; renderLibrary(); } });
+$("#search").addEventListener("input", e => { state.search = e.target.value.trim(); renderLibrary(); });
+
+let editing = null;
+$("#libBody").addEventListener("click", async e => {
+  const tr = e.target.closest("tr[data-id]"); if (!tr) return;
+  const song = state.library.find(s => s.id === tr.dataset.id); if (!song) return;
+  if (e.target.closest("[data-del]")) {
+    if (!confirm(`Remove "${song.title}" from the map? The audio stays on your Roblox account.`)) return;
+    try { await api("/api/library/" + encodeURIComponent(song.id), { method: "DELETE" }); toast("Removed from the map"); refreshLibrary(); }
+    catch (err) { toast(err.message); }
+  }
+  if (e.target.closest("[data-edit]")) {
+    editing = song; const f = $("#editForm");
+    f.title.value = song.title; f.genre.innerHTML = genreOptions(song.genre); f.sub.innerHTML = subOptions(song.genre, song.sub); f.speed.value = song.speed;
+    $("#editErr").textContent = ""; $("#editDlg").showModal();
+  }
+});
+$("#editForm").genre.addEventListener("change", e => { $("#editForm").sub.innerHTML = subOptions(e.target.value, ""); });
+$("#editForm").addEventListener("submit", async e => {
+  if (e.submitter?.value !== "save") return;
+  e.preventDefault();
+  const f = e.target, body = { title: f.title.value.trim(), genre: f.genre.value, sub: f.sub.value, speed: Number(f.speed.value) };
+  if (!body.title) { $("#editErr").textContent = "Title can't be empty."; return; }
+  if (!validSpeed(body.speed)) { $("#editErr").textContent = "In-game playback speed must be between 0.01 and 2."; return; }
+  try { await api("/api/library/" + encodeURIComponent(editing.id), { method: "PATCH", body: JSON.stringify(body) }); $("#editDlg").close(); toast("Changes saved"); refreshLibrary(); }
+  catch (err) { $("#editErr").textContent = err.message; }
+});
+
+syncDefaultPlayback(); renderStaged(); renderQueue(); connect();
+})();
+</script>
+</body>
+</html>

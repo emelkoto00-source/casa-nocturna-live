@@ -74,7 +74,9 @@ app.get('/api/health', (req, res) => {
     robloxConfigured: roblox.configured,
     simulation: roblox.simulate,
     gameSyncConfigured: Boolean(process.env.GAME_SYNC_TOKEN),
-    moderationGate: true
+    moderationGate: true,
+    casaUniverseConfigured: Boolean(process.env.CASA_UNIVERSE_ID),
+    automaticAssetAccess: true
   });
 });
 
@@ -157,17 +159,98 @@ app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   });
 });
 
+async function addApprovedJobToLibrary(job) {
+  if (!store.state.library.some(s => s.jobId === job.id)) {
+    store.state.library.unshift({
+      id: crypto.randomUUID(), jobId: job.id,
+      title: job.title, artist: job.artist || 'Unknown Artist', genre: job.genre, sub: job.sub,
+      conversionSpeed: job.conversionSpeed, speed: job.speed,
+      assetIds: job.parts.map(p => p.assetId), addedAt: Date.now(),
+      moderationStatus: 'approved',
+      accessStatus: 'granted',
+      casaUniverseId: String(process.env.CASA_UNIVERSE_ID || '')
+    });
+  }
+}
+
+const activeAccessMonitors = new Set();
+
+async function grantCasaAccess(job) {
+  if (!job.pushToMap) return true;
+
+  const universeId = String(process.env.CASA_UNIVERSE_ID || '').trim();
+  if (!universeId) {
+    job.stage = 'access_required';
+    job.error = 'CASA_UNIVERSE_ID is missing on Railway.';
+    await store.save();
+    return false;
+  }
+
+  job.stage = 'granting_access';
+  job.error = undefined;
+  await store.save();
+
+  try {
+    for (const part of job.parts || []) {
+      if (!part.assetId || !approvedPart(part)) continue;
+      if (part.accessStatus === 'granted') continue;
+
+      const result = await roblox.grantUniverseUsePermission(part.assetId, universeId);
+      part.accessStatus = 'granted';
+      part.accessGrantedAt = Date.now();
+      part.accessHttpStatus = result?.status || 200;
+      part.accessError = undefined;
+      await store.save();
+    }
+
+    const approvedParts = (job.parts || []).filter(approvedPart);
+    const allGranted = approvedParts.length > 0 && approvedParts.every(p => p.accessStatus === 'granted');
+    if (!allGranted) throw new Error('Not every approved asset received Casa Nocturna access.');
+
+    return true;
+  } catch (err) {
+    job.stage = 'access_required';
+    job.error = err.message || String(err);
+    for (const part of job.parts || []) {
+      if (approvedPart(part) && part.accessStatus !== 'granted') {
+        part.accessStatus = 'failed';
+        part.accessError = job.error;
+      }
+    }
+    await store.save();
+    return false;
+  }
+}
+
+async function monitorCasaAccess(job) {
+  if (!job?.id || activeAccessMonitors.has(job.id) || !job.pushToMap) return;
+  activeAccessMonitors.add(job.id);
+  try {
+    while (job.stage === 'access_required' || job.stage === 'granting_access') {
+      const granted = await grantCasaAccess(job);
+      if (granted) {
+        await addApprovedJobToLibrary(job);
+        job.stage = 'in_map';
+        job.finishedAt = Date.now();
+        job.error = undefined;
+        await store.save();
+        return;
+      }
+      await sleep(30000);
+    }
+  } finally {
+    activeAccessMonitors.delete(job.id);
+  }
+}
+
 async function finalizeApprovedJob(job) {
   if (job.pushToMap) {
-    if (!store.state.library.some(s => s.jobId === job.id)) {
-      store.state.library.unshift({
-        id: crypto.randomUUID(), jobId: job.id,
-        title: job.title, artist: job.artist || 'Unknown Artist', genre: job.genre, sub: job.sub,
-        conversionSpeed: job.conversionSpeed, speed: job.speed,
-        assetIds: job.parts.map(p => p.assetId), addedAt: Date.now(),
-        moderationStatus: 'approved'
-      });
+    const granted = await grantCasaAccess(job);
+    if (!granted) {
+      monitorCasaAccess(job).catch(err => console.error('[Casa access monitor]', err));
+      return;
     }
+    await addApprovedJobToLibrary(job);
     job.stage = 'in_map';
   } else {
     job.stage = 'approved';
@@ -285,6 +368,9 @@ function processJob(job, inputPath) {
 for (const job of store.state.jobs) {
   if (job.stage === 'moderating' && (job.parts || []).some(p => p.assetId)) {
     monitorModeration(job).catch(err => console.error('[moderation resume]', err));
+  }
+  if ((job.stage === 'access_required' || job.stage === 'granting_access') && job.pushToMap) {
+    monitorCasaAccess(job).catch(err => console.error('[Casa access resume]', err));
   }
 }
 

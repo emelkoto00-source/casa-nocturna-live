@@ -280,7 +280,7 @@ const CONVERSION_SPEEDS = [2.1, 2.3, 2.6, 2.7, 2.9];
 const inverseSpeed = v => 1 / Number(v);
 const playbackText = v => inverseSpeed(v).toFixed(6);
 const conversionOptions = sel => CONVERSION_SPEEDS.map(v => `<option value="${v}"${Number(sel) === v ? " selected" : ""}>${v.toFixed(1)}×</option>`).join("");
-const STAGES = ["uploading", "processing", "moderating", "in_map"];
+const STAGES = ["uploading", "processing", "moderating", "granting_access", "in_map"];
 const FINAL = new Set(["in_map", "approved", "accepted", "declined", "rejected", "failed"]);
 const $ = (s, r = document) => r.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -495,7 +495,7 @@ $("#uploadBtn").addEventListener("click", async () => {
 });
 
 /* ---------- queue ---------- */
-function stageIndex(j){ return (j.stage === "approved" || j.stage === "accepted") ? 3 : (j.stage === "declined" || j.stage === "rejected") ? 2 : Math.max(0, STAGES.indexOf(j.stage)); }
+function stageIndex(j){ return (j.stage === "approved" || j.stage === "accepted") ? 4 : (j.stage === "declined" || j.stage === "rejected") ? 2 : j.stage === "access_required" ? 3 : Math.max(0, STAGES.indexOf(j.stage)); }
 function luaFor(j){
   const ok = (j.parts || []).filter(p => p.status === "approved" || p.status === "accepted"); const n = ok.length;
   return ok.map(p => `\t{ id = ${p.assetId}, title = ${JSON.stringify(n > 1 ? `${j.title} (${p.index}/${n})` : j.title)}, artist = ${JSON.stringify(j.artist || "Unknown Artist")}, speed = ${Number(j.speed ?? 1).toFixed(6)}, genre = ${JSON.stringify(j.genre)}${j.sub ? `, sub = ${JSON.stringify(j.sub)}` : ""} }, -- converted ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}x`).join("\n");
@@ -504,7 +504,7 @@ function noteFor(j){
   switch (j.stage) {
     case "uploading": return `Sending file to the server… ${Math.round((j.progress || 0) * 100)}%`;
     case "processing": return `Converting at ${Number(j.conversionSpeed || (1 / j.speed)).toFixed(1)}×; game playback will be ${Number(j.speed || 1).toFixed(6)}×.`;
-    case "moderating": return "Uploaded to Roblox. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.";
+    case "moderating": return "Uploaded to Roblox. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.";\n    case "granting_access": return "Approved by Roblox. Giving Casa Nocturna permission to use the audio…";\n    case "access_required": return j.error ? `Approved, but Casa access is not granted yet. Retrying automatically: ${j.error}` : "Approved, but Casa access is not granted yet. Retrying automatically.";
     case "in_map": return "Approved by Roblox and added to the live library.";
     case "approved": return "Approved by Roblox. Not added to the map, so copy the IDs if you need them.";
     case "accepted": return "Approved by Roblox. Not added to the map, so copy the IDs if you need them.";
@@ -519,13 +519,13 @@ function renderQueue(){
   if (!state.jobs.length) { ul.innerHTML = `<li class="empty">Uploads show up here with their moderation status.</li>`; return; }
   ul.innerHTML = state.jobs.map(j => {
     const idx = stageIndex(j), bad = j.stage === "declined" || j.stage === "rejected" || j.stage === "failed", finished = j.stage === "in_map" || j.stage === "approved" || j.stage === "accepted";
-    const labels = ["Upload", "Split", "Moderation", j.pushToMap === false ? "Done" : "In map"];
-    const fillPct = finished ? 100 : (idx / 3) * 100;
+    const labels = ["Upload", "Split", "Moderation", j.pushToMap === false ? "Ready" : "Access", j.pushToMap === false ? "Done" : "In map"];
+    const fillPct = finished ? 100 : (idx / 4) * 100;
     const stages = labels.map((l, i) => {
-      let c = i < idx || (finished && i === 3) ? "done" : i === idx ? (bad ? "bad" : "now") : "";
+      let c = i < idx || (finished && i === 4) ? "done" : i === idx ? (bad ? "bad" : "now") : "";
       return `<div class="stage ${c}"><b></b><span>${l}</span></div>`;
     }).join("");
-    const parts = (j.parts || []).map(p => { const ok = p.status === "approved" || p.status === "accepted"; const bad = p.status === "declined" || p.status === "rejected"; const label = ok ? "Approved" : bad ? "Declined" : "Pending"; return `<li><code>rbxassetid://${esc(p.assetId || "pending")}</code>${j.parts.length > 1 ? `<span class="jmeta">Part ${p.index}</span>` : ""}<span class="pill ${ok ? "ok" : bad ? "bad" : "wait"}" title="${esc(p.moderationLabel || label)}">${label}</span></li>`; }).join("");
+    const parts = (j.parts || []).map(p => { const ok = p.status === "approved" || p.status === "accepted"; const bad = p.status === "declined" || p.status === "rejected"; const label = ok ? "Approved" : bad ? "Declined" : "Pending"; const access = p.accessStatus === "granted" ? `<span class="pill ok" title="Casa Nocturna has Use permission">Casa access</span>` : p.accessStatus === "failed" ? `<span class="pill wait" title="${esc(p.accessError || "Access retrying")}">Access retrying</span>` : ""; return `<li><code>rbxassetid://${esc(p.assetId || "pending")}</code>${j.parts.length > 1 ? `<span class="jmeta">Part ${p.index}</span>` : ""}<span class="pill ${ok ? "ok" : bad ? "bad" : "wait"}" title="${esc(p.moderationLabel || label)}">${label}</span>${access}</li>`; }).join("");
     const hasLua = (j.parts || []).some(p => p.status === "approved" || p.status === "accepted");
     return `<li class="job ${j.stage}" data-id="${esc(j.id)}">
       <div class="jhead"><span class="jtitle">${esc(j.title)}${j.artist ? `<span class="jmeta" style="display:block">${esc(j.artist)}</span>` : ""}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× game · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>

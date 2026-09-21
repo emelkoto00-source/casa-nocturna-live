@@ -90,6 +90,7 @@ app.patch('/api/library/:id', adminAuth, async (req, res) => {
   const song = store.state.library.find(s => s.id === req.params.id);
   if (!song) return res.status(404).json({ error: 'Song not found.' });
   if (req.body.title != null) song.title = cleanText(req.body.title);
+  if (req.body.artist != null) song.artist = cleanText(req.body.artist);
   if (req.body.genre != null && validGenre(req.body.genre)) song.genre = req.body.genre;
   if (req.body.sub != null) song.sub = cleanText(req.body.sub, 60);
   if (req.body.speed != null) {
@@ -117,6 +118,7 @@ app.get('/api/game/library', gameAuth, (req, res) => {
     songs: store.state.library.map(s => ({
       id: s.id,
       title: s.title,
+      artist: s.artist || '',
       genre: s.genre,
       sub: s.sub || '',
       speed: s.speed,
@@ -130,6 +132,7 @@ app.get('/api/game/library', gameAuth, (req, res) => {
 app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Choose an audio/video file.' });
   const title = cleanText(req.body.title) || cleanText(req.file.originalname.replace(/\.[^.]+$/, '')) || 'Untitled';
+  const artist = cleanText(req.body.artist) || 'Unknown Artist';
   const conversionSpeed = Number(req.body.conversionSpeed);
   if (!PRESETS.includes(conversionSpeed)) {
     await fs.rm(req.file.path, { force: true });
@@ -139,7 +142,7 @@ app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   const sub = cleanText(req.body.sub, 60);
   const pushToMap = String(req.body.pushToMap) !== '0';
   const job = {
-    id: crypto.randomUUID(), title, genre, sub, conversionSpeed,
+    id: crypto.randomUUID(), title, artist, genre, sub, conversionSpeed,
     speed: inverseSpeed(conversionSpeed), pushToMap,
     stage: 'processing', parts: [], createdAt: Date.now(), originalName: req.file.originalname,
     moderationGate: true
@@ -159,7 +162,7 @@ async function finalizeApprovedJob(job) {
     if (!store.state.library.some(s => s.jobId === job.id)) {
       store.state.library.unshift({
         id: crypto.randomUUID(), jobId: job.id,
-        title: job.title, genre: job.genre, sub: job.sub,
+        title: job.title, artist: job.artist || 'Unknown Artist', genre: job.genre, sub: job.sub,
         conversionSpeed: job.conversionSpeed, speed: job.speed,
         assetIds: job.parts.map(p => p.assetId), addedAt: Date.now(),
         moderationStatus: 'approved'

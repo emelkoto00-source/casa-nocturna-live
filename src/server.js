@@ -30,9 +30,11 @@ const GENRES = {
   'KPOP': ['K-Pop', 'Latin']
 };
 const PRESETS = [2.1, 2.3, 2.6, 2.7, 2.9];
-const FINAL = new Set(['in_map', 'accepted', 'rejected', 'failed']);
+const FINAL = new Set(['in_map', 'approved', 'accepted', 'declined', 'rejected', 'failed']);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 200);
+const moderationPollMs = Math.max(5, Number(process.env.ROBLOX_MODERATION_POLL_SECONDS || 15)) * 1000;
 const upload = multer({ dest: uploadDir, limits: { fileSize: maxUploadMb * 1_000_000, files: 1 } });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const app = express();
 app.disable('x-powered-by');
@@ -60,6 +62,8 @@ function gameAuth(req, res, next) {
 function cleanText(v, max = 80) { return String(v || '').trim().slice(0, max); }
 function validGenre(g) { return Object.prototype.hasOwnProperty.call(GENRES, g); }
 function inverseSpeed(factor) { return Number((1 / Number(factor)).toFixed(9)); }
+function approvedPart(p) { return p?.status === 'approved' || p?.status === 'accepted'; }
+function declinedPart(p) { return p?.status === 'declined' || p?.status === 'rejected'; }
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -69,7 +73,8 @@ app.get('/api/health', (req, res) => {
     presets: PRESETS,
     robloxConfigured: roblox.configured,
     simulation: roblox.simulate,
-    gameSyncConfigured: Boolean(process.env.GAME_SYNC_TOKEN)
+    gameSyncConfigured: Boolean(process.env.GAME_SYNC_TOKEN),
+    moderationGate: true
   });
 });
 
@@ -136,7 +141,8 @@ app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   const job = {
     id: crypto.randomUUID(), title, genre, sub, conversionSpeed,
     speed: inverseSpeed(conversionSpeed), pushToMap,
-    stage: 'processing', parts: [], createdAt: Date.now(), originalName: req.file.originalname
+    stage: 'processing', parts: [], createdAt: Date.now(), originalName: req.file.originalname,
+    moderationGate: true
   };
   store.state.jobs.unshift(job);
   await store.save();
@@ -147,6 +153,82 @@ app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
     await fs.rm(req.file.path, { force: true }).catch(() => {});
   });
 });
+
+async function finalizeApprovedJob(job) {
+  if (job.pushToMap) {
+    if (!store.state.library.some(s => s.jobId === job.id)) {
+      store.state.library.unshift({
+        id: crypto.randomUUID(), jobId: job.id,
+        title: job.title, genre: job.genre, sub: job.sub,
+        conversionSpeed: job.conversionSpeed, speed: job.speed,
+        assetIds: job.parts.map(p => p.assetId), addedAt: Date.now(),
+        moderationStatus: 'approved'
+      });
+    }
+    job.stage = 'in_map';
+  } else {
+    job.stage = 'approved';
+  }
+  job.finishedAt = Date.now();
+  job.error = undefined;
+  await store.save();
+}
+
+async function finalizeDeclinedJob(job) {
+  job.stage = 'declined';
+  job.error = job.parts.find(declinedPart)?.moderationLabel || 'Roblox moderation declined this audio.';
+  job.finishedAt = Date.now();
+  await store.save();
+}
+
+const activeModerationMonitors = new Set();
+async function monitorModeration(job) {
+  if (!job?.id || activeModerationMonitors.has(job.id) || job.stage !== 'moderating') return;
+  activeModerationMonitors.add(job.id);
+  try {
+    while (job.stage === 'moderating') {
+      let allApproved = true;
+      let anyDeclined = false;
+
+      for (const part of job.parts || []) {
+        if (!part.assetId) { allApproved = false; continue; }
+        if (approvedPart(part)) continue;
+        if (declinedPart(part)) { anyDeclined = true; allApproved = false; continue; }
+
+        try {
+          const result = await roblox.getModerationStatus(part.assetId, part.operationId);
+          part.lastModerationCheckAt = Date.now();
+          part.moderationSource = result.source;
+          part.moderationLabel = result.label;
+          if (result.status === 'approved') part.status = 'approved';
+          else if (result.status === 'declined') { part.status = 'declined'; anyDeclined = true; }
+          else { part.status = 'pending'; allApproved = false; }
+        } catch (err) {
+          part.status = 'pending';
+          part.lastModerationCheckAt = Date.now();
+          part.moderationLabel = `Status check failed: ${err.message || String(err)}`;
+          allApproved = false;
+        }
+      }
+
+      job.lastModerationCheckAt = Date.now();
+      await store.save();
+
+      if (anyDeclined) {
+        await finalizeDeclinedJob(job);
+        return;
+      }
+      if (allApproved && (job.parts || []).length > 0) {
+        await finalizeApprovedJob(job);
+        return;
+      }
+
+      await sleep(moderationPollMs);
+    }
+  } finally {
+    activeModerationMonitors.delete(job.id);
+  }
+}
 
 let worker = Promise.resolve();
 function processJob(job, inputPath) {
@@ -159,7 +241,9 @@ function processJob(job, inputPath) {
         format: process.env.OUTPUT_FORMAT || 'mp3', bitrate: process.env.OUTPUT_BITRATE || '192k',
         maxPartSeconds: Number(process.env.ROBLOX_MAX_UPLOAD_SECONDS || 360)
       });
+
       job.stage = 'moderating';
+      job.moderationStartedAt = Date.now();
       job.parts = parts.map(p => ({ index: p.index, status: 'pending', duration: p.duration }));
       await store.save();
 
@@ -167,27 +251,38 @@ function processJob(job, inputPath) {
         const result = await roblox.uploadAudio(part.file, job.title, part.index);
         const rec = job.parts.find(p => p.index === part.index);
         rec.assetId = result.assetId;
-        rec.status = 'accepted'; // Asset creation operation succeeded. Content playback can still depend on Roblox moderation/permissions.
+        rec.operationId = result.operationId || null;
         rec.simulated = Boolean(result.simulated);
+        rec.uploadedAt = Date.now();
+        rec.moderationLabel = result.moderation?.label || 'Pending review';
+        rec.status = result.moderation?.status === 'approved' ? 'approved'
+          : result.moderation?.status === 'declined' ? 'declined'
+          : 'pending';
         await store.save();
       }
 
-      job.stage = job.pushToMap ? 'in_map' : 'accepted';
-      job.finishedAt = Date.now();
-      if (job.pushToMap) {
-        store.state.library.unshift({
-          id: crypto.randomUUID(), title: job.title, genre: job.genre, sub: job.sub,
-          conversionSpeed: job.conversionSpeed, speed: job.speed,
-          assetIds: job.parts.map(p => p.assetId), addedAt: Date.now()
-        });
-      }
-      await store.save();
       for (const p of parts) await fs.rm(p.file, { force: true }).catch(() => {});
+
+      if (job.parts.some(declinedPart)) {
+        await finalizeDeclinedJob(job);
+      } else if (job.parts.every(approvedPart)) {
+        await finalizeApprovedJob(job);
+      } else {
+        // Do not block future conversions while Roblox reviews this asset.
+        monitorModeration(job).catch(err => console.error('[moderation monitor]', err));
+      }
     } finally {
       await fs.rm(inputPath, { force: true }).catch(() => {});
     }
   });
   return worker;
+}
+
+// Resume moderation watches after a Railway restart/redeploy.
+for (const job of store.state.jobs) {
+  if (job.stage === 'moderating' && (job.parts || []).some(p => p.assetId)) {
+    monitorModeration(job).catch(err => console.error('[moderation resume]', err));
+  }
 }
 
 app.use((err, req, res, next) => {

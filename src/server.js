@@ -26,8 +26,10 @@ const GENRES = {
   'West Coast': ['The Hood', 'Pop', 'R&B'],
   'Young Stunna': ['Tambay Kalye', 'OPM Daily', 'Sugbo Trip'],
   'Jejemons': [],
-  'Casa Floor': ['Dance Pop', 'Rave Mix', 'Disco'],
-  'KPOP': ['K-Pop', 'Latin']
+  'Casa Floor': ['Rave Mix', 'Disco'],
+  'KPOP': ['K-Pop'],
+  'Latin': [],
+  'Budots': []
 };
 const PRESETS = [2.1, 2.3, 2.6, 2.7, 2.9];
 const FINAL = new Set(['in_map', 'approved', 'accepted', 'declined', 'rejected', 'failed']);

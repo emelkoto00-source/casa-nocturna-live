@@ -86,7 +86,7 @@ export class RobloxClient {
     this.operationBase = (env.ROBLOX_OPERATION_BASE_URL || 'https://apis.roblox.com/assets/v1/operations').replace(/\/$/, '');
     this.assetBase = (env.ROBLOX_ASSET_BASE_URL || 'https://apis.roblox.com/assets/v1/assets').replace(/\/$/, '');
     this.statusUrlTemplate = env.ROBLOX_MODERATION_STATUS_URL_TEMPLATE || '';
-    this.assetPermissionsBase = (env.ROBLOX_ASSET_PERMISSIONS_BASE_URL || 'https://apis.roblox.com/asset-permissions-api/v1/assets').replace(/\/$/, '');
+    this.assetPermissionsUrl = env.ROBLOX_ASSET_PERMISSIONS_URL || 'https://apis.roblox.com/asset-permissions-api/v1/assets/permissions';
     this.casaUniverseId = String(env.CASA_UNIVERSE_ID || '').trim();
     this.simulate = String(env.SIMULATE_ROBLOX || '').toLowerCase() === 'true';
   }
@@ -167,41 +167,93 @@ export class RobloxClient {
     if (!assetId) throw new Error('Cannot grant Casa access: asset ID is missing.');
     if (!universeId) throw new Error('CASA_UNIVERSE_ID is missing.');
 
-    const url = `${this.assetPermissionsBase}/${encodeURIComponent(assetId)}/permissions`;
+    // Roblox Open Cloud Asset Permissions API expects assetId as an int64 JSON number.
+    // Roblox asset IDs currently used here are within JavaScript's safe-integer range.
+    const numericAssetId = Number(assetId);
+    if (!Number.isSafeInteger(numericAssetId) || numericAssetId <= 0) {
+      throw new Error(`Cannot grant Casa access: invalid asset ID ${assetId}.`);
+    }
+
     const body = {
+      subjectType: 'Universe',
+      subjectId: String(universeId),
+      action: 'Use',
       requests: [
         {
-          subjectType: 'Universe',
-          subjectId: String(universeId),
-          action: 'Use'
+          assetId: numericAssetId
         }
-      ],
-      enableDeepAccessCheck: false,
-      grantToDependencies: true
+      ]
     };
 
-    const res = await fetch(url, {
+    const res = await fetch(this.assetPermissionsUrl, {
       method: 'PATCH',
       headers: {
         'x-api-key': this.key,
-        'content-type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify(body)
     });
 
     const text = await res.text();
-    let data = {};
+    let data = null;
     if (text) {
-      try { data = JSON.parse(text); }
-      catch { data = { raw: text }; }
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { rawBody: text };
+      }
     }
 
     if (!res.ok) {
-      const detail = data?.message || data?.error || data?.errors?.[0]?.message || text;
-      throw new Error(`Roblox asset permission failed (${res.status})${detail ? `: ${detail}` : '.'}`);
+      const detail =
+        data?.error?.message ||
+        data?.errors?.[0]?.message ||
+        data?.message ||
+        data?.rawBody ||
+        text ||
+        res.statusText;
+      const code =
+        data?.error?.code ||
+        data?.errors?.[0]?.code;
+      throw new Error(
+        `Roblox Open Cloud asset permission failed (${res.status})` +
+        `${code ? ` ${code}` : ''}` +
+        `${detail ? `: ${detail}` : ''}`
+      );
     }
 
-    return { ok: true, status: res.status, data };
+    // A 200 can contain per-asset failures, so don't rely on response.ok alone.
+    const grantErrors = Array.isArray(data?.errors) ? data.errors : [];
+    const matchingError = grantErrors.find(
+      item => String(item?.assetId ?? '') === String(numericAssetId)
+    );
+    if (matchingError || grantErrors.length > 0) {
+      const err = matchingError || grantErrors[0];
+      throw new Error(
+        `Roblox Open Cloud asset permission returned an asset error` +
+        `${err?.code ? ` (${err.code})` : ''}` +
+        `${err?.assetId ? ` for ${err.assetId}` : ''}.`
+      );
+    }
+
+    const successIds = Array.isArray(data?.successAssetIds)
+      ? data.successAssetIds.map(String)
+      : null;
+
+    if (successIds && successIds.length > 0 && !successIds.includes(String(numericAssetId))) {
+      throw new Error(
+        `Roblox Open Cloud returned 200 but did not confirm asset ${numericAssetId} in successAssetIds.`
+      );
+    }
+
+    return {
+      ok: true,
+      status: res.status,
+      data,
+      assetId: String(numericAssetId),
+      universeId: String(universeId)
+    };
   }
 
   async fetchModerationDocument(assetId, operationId) {

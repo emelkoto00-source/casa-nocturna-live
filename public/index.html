@@ -225,7 +225,7 @@ dialog form{display:grid;gap:14px}
     <h1>Library</h1>
     <p class="lede">Everything the live music system loads from the website. Conversion speed is stored alongside the inverse in-game playback speed used by your existing music system.</p>
     <div class="libtools">
-      <input class="inp" id="search" type="search" placeholder="Search titles or asset IDs" aria-label="Search library">
+      <input class="inp" id="search" type="search" placeholder="Search titles, artists, or asset IDs" aria-label="Search library">
       <span class="count" id="libCount"></span>
     </div>
     <div class="chips" id="genreChips"></div>
@@ -237,6 +237,7 @@ dialog form{display:grid;gap:14px}
   <form method="dialog" id="editForm">
     <h2>Edit song</h2>
     <label class="f">Title <input class="inp" name="title" required maxlength="80"></label>
+    <label class="f">Artist <input class="inp" name="artist" required maxlength="80"></label>
     <div class="two">
       <label class="f">Genre <select class="inp" name="genre"></select></label>
       <label class="f">Sub-playlist <select class="inp" name="sub"></select></label>
@@ -308,7 +309,7 @@ async function api(path, opts = {}){
 }
 function uploadFile(item, onProgress){
   const fd = new FormData();
-  fd.append("file", item.file); fd.append("title", item.title); fd.append("conversionSpeed", item.conversionSpeed); fd.append("speed", item.speed);
+  fd.append("file", item.file); fd.append("title", item.title); fd.append("artist", item.artist); fd.append("conversionSpeed", item.conversionSpeed); fd.append("speed", item.speed);
   fd.append("genre", item.genre); fd.append("sub", item.sub); fd.append("pushToMap", $("#pushToMap").checked ? "1" : "0");
   if (state.mode === "demo") return demo.upload(item, $("#pushToMap").checked, onProgress);
   return new Promise((resolve, reject) => {
@@ -327,8 +328,8 @@ function uploadFile(item, onProgress){
 /* ---------- preview simulation ---------- */
 const demo = {
   jobs: [], lib: [
-    { id: "s1", title: "Sample track", genre: "Casa Floor", sub: "Rave Mix", conversionSpeed: 2.3, speed: inverseSpeed(2.3), assetIds: ["100000000000001"], addedAt: Date.now() - 864e5 },
-    { id: "s2", title: "Sample long mix", genre: "West Coast", sub: "The Hood", conversionSpeed: 2.7, speed: inverseSpeed(2.7), assetIds: ["100000000000002", "100000000000003"], addedAt: Date.now() - 1728e5 }
+    { id: "s1", title: "Sample track", artist: "Sample Artist", genre: "Casa Floor", sub: "Rave Mix", conversionSpeed: 2.3, speed: inverseSpeed(2.3), assetIds: ["100000000000001"], addedAt: Date.now() - 864e5 },
+    { id: "s2", title: "Sample long mix", artist: "Sample Artist", genre: "West Coast", sub: "The Hood", conversionSpeed: 2.7, speed: inverseSpeed(2.7), assetIds: ["100000000000002", "100000000000003"], addedAt: Date.now() - 1728e5 }
   ],
   fakeId(){ return String(Math.floor(1e14 + Math.random() * 9e14)); },
   async handle(path, opts){
@@ -348,14 +349,14 @@ const demo = {
       let p = 0; const t = setInterval(() => { p = Math.min(1, p + .2); onProgress(p); if (p >= 1) { clearInterval(t); done(); } }, 180);
       const done = () => {
         const nParts = item.file.size > 12e6 ? 2 : 1;
-        const job = { id: "j" + Date.now() + Math.random().toString(36).slice(2, 6), title: item.title, genre: item.genre, sub: item.sub, conversionSpeed: item.conversionSpeed, speed: item.speed, pushToMap: push, stage: "processing", parts: [], createdAt: Date.now() };
+        const job = { id: "j" + Date.now() + Math.random().toString(36).slice(2, 6), title: item.title, artist: item.artist, genre: item.genre, sub: item.sub, conversionSpeed: item.conversionSpeed, speed: item.speed, pushToMap: push, stage: "processing", parts: [], createdAt: Date.now() };
         this.jobs.unshift(job); resolve({ job });
         const rejected = /reject/i.test(item.file.name);
         setTimeout(() => { job.stage = "moderating"; job.parts = Array.from({ length: nParts }, (_, i) => ({ index: i + 1, assetId: this.fakeId(), status: "pending" })); }, 1600);
         setTimeout(() => {
           if (rejected) { job.stage = "declined"; job.parts.forEach(p => p.status = "declined"); job.error = "Roblox moderation declined this audio."; return; }
           job.parts.forEach(p => p.status = "approved"); job.stage = push ? "in_map" : "approved";
-          if (push) this.lib.unshift({ id: "s" + Date.now(), title: job.title, genre: job.genre, sub: job.sub, conversionSpeed: job.conversionSpeed, speed: job.speed, assetIds: job.parts.map(p => p.assetId), addedAt: Date.now() });
+          if (push) this.lib.unshift({ id: "s" + Date.now(), title: job.title, artist: job.artist, genre: job.genre, sub: job.sub, conversionSpeed: job.conversionSpeed, speed: job.speed, assetIds: job.parts.map(p => p.assetId), addedAt: Date.now() });
         }, 5200);
       };
     });
@@ -426,7 +427,7 @@ function addFiles(list){
     if (!/^(audio|video)\//.test(f.type) && !/\.(mp3|wav|ogg|flac|m4a|mp4|mov|webm)$/i.test(f.name)) { skipped.push(`${f.name} (not audio or video)`); continue; }
     if (f.size > MAX_MB * 1e6) { skipped.push(`${f.name} (over ${MAX_MB} MB)`); continue; }
     const conversionSpeed = Number($("#defConvert").value || 2.3);
-    state.staged.push({ uid: ++uid, file: f, title: titleFromName(f.name), conversionSpeed, speed: inverseSpeed(conversionSpeed), genre: $("#defGenre").value, sub: $("#defSub").value });
+    state.staged.push({ uid: ++uid, file: f, title: titleFromName(f.name), artist: "", conversionSpeed, speed: inverseSpeed(conversionSpeed), genre: $("#defGenre").value, sub: $("#defSub").value });
   }
   if (skipped.length) $("#uploadErr").textContent = "Skipped: " + skipped.join("; ");
   renderStaged();
@@ -440,6 +441,7 @@ function renderStaged(){
         <button class="x" data-rm aria-label="Remove ${esc(it.title)}">✕</button>
       </div>
       <p class="fname">${esc(it.file.name)} · ${(it.file.size / 1e6).toFixed(1)} MB</p>
+      <label class="f" style="margin-bottom:10px">Artist <input class="inp" data-k="artist" value="${esc(it.artist || "")}" maxlength="80" placeholder="Artist name" aria-label="Artist name"></label>
       <div class="srow2">
         <label class="f speed">Conversion <select class="inp" data-k="conversionSpeed">${conversionOptions(it.conversionSpeed)}</select><span class="playback">In-game ${Number(it.speed).toFixed(6)}×</span></label>
         <label class="f">Genre <select class="inp" data-k="genre">${genreOptions(it.genre)}</select></label>
@@ -473,13 +475,13 @@ function validSpeed(v){ const n = Number(v); return Number.isFinite(n) && n >= 0
 function validConversion(v){ return CONVERSION_SPEEDS.includes(Number(v)); }
 $("#uploadBtn").addEventListener("click", async () => {
   const err = $("#uploadErr"); err.textContent = "";
-  const bad = state.staged.find(it => !it.title.trim() || !validConversion(it.conversionSpeed) || !validSpeed(it.speed));
-  if (bad) { err.textContent = !bad.title.trim() ? "Every song needs a title." : `Choose one of the supported conversion presets for "${bad.title}".`; return; }
-  const batch = state.staged.map(it => ({ ...it, title: it.title.trim(), conversionSpeed: Number(it.conversionSpeed), speed: inverseSpeed(it.conversionSpeed) }));
+  const bad = state.staged.find(it => !it.title.trim() || !String(it.artist || "").trim() || !validConversion(it.conversionSpeed) || !validSpeed(it.speed));
+  if (bad) { err.textContent = !bad.title.trim() ? "Every song needs a title." : !String(bad.artist || "").trim() ? `Add an artist for "${bad.title}".` : `Choose one of the supported conversion presets for "${bad.title}".`; return; }
+  const batch = state.staged.map(it => ({ ...it, title: it.title.trim(), artist: String(it.artist || "").trim(), conversionSpeed: Number(it.conversionSpeed), speed: inverseSpeed(it.conversionSpeed) }));
   state.staged = []; renderStaged();
   const btn = $("#uploadBtn"); btn.disabled = true;
   for (const it of batch) {
-    const local = { id: "local-" + it.uid, title: it.title, genre: it.genre, sub: it.sub, stage: "uploading", progress: 0, parts: [], local: true };
+    const local = { id: "local-" + it.uid, title: it.title, artist: it.artist, genre: it.genre, sub: it.sub, stage: "uploading", progress: 0, parts: [], local: true };
     state.jobs.unshift(local); renderQueue();
     try {
       await uploadFile(it, p => { local.progress = p; renderQueue(); });
@@ -496,7 +498,7 @@ $("#uploadBtn").addEventListener("click", async () => {
 function stageIndex(j){ return (j.stage === "approved" || j.stage === "accepted") ? 3 : (j.stage === "declined" || j.stage === "rejected") ? 2 : Math.max(0, STAGES.indexOf(j.stage)); }
 function luaFor(j){
   const ok = (j.parts || []).filter(p => p.status === "approved" || p.status === "accepted"); const n = ok.length;
-  return ok.map(p => `\t{ id = ${p.assetId}, title = ${JSON.stringify(n > 1 ? `${j.title} (${p.index}/${n})` : j.title)}, speed = ${Number(j.speed ?? 1).toFixed(6)}, genre = ${JSON.stringify(j.genre)}${j.sub ? `, sub = ${JSON.stringify(j.sub)}` : ""} }, -- converted ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}x`).join("\n");
+  return ok.map(p => `\t{ id = ${p.assetId}, title = ${JSON.stringify(n > 1 ? `${j.title} (${p.index}/${n})` : j.title)}, artist = ${JSON.stringify(j.artist || "Unknown Artist")}, speed = ${Number(j.speed ?? 1).toFixed(6)}, genre = ${JSON.stringify(j.genre)}${j.sub ? `, sub = ${JSON.stringify(j.sub)}` : ""} }, -- converted ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}x`).join("\n");
 }
 function noteFor(j){
   switch (j.stage) {
@@ -526,7 +528,7 @@ function renderQueue(){
     const parts = (j.parts || []).map(p => { const ok = p.status === "approved" || p.status === "accepted"; const bad = p.status === "declined" || p.status === "rejected"; const label = ok ? "Approved" : bad ? "Declined" : "Pending"; return `<li><code>rbxassetid://${esc(p.assetId || "pending")}</code>${j.parts.length > 1 ? `<span class="jmeta">Part ${p.index}</span>` : ""}<span class="pill ${ok ? "ok" : bad ? "bad" : "wait"}" title="${esc(p.moderationLabel || label)}">${label}</span></li>`; }).join("");
     const hasLua = (j.parts || []).some(p => p.status === "approved" || p.status === "accepted");
     return `<li class="job ${j.stage}" data-id="${esc(j.id)}">
-      <div class="jhead"><span class="jtitle">${esc(j.title)}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× game · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
+      <div class="jhead"><span class="jtitle">${esc(j.title)}${j.artist ? `<span class="jmeta" style="display:block">${esc(j.artist)}</span>` : ""}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× game · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
       <div class="stages"><div class="fill" style="width:${fillPct}%"></div>${stages}</div>
       <p class="jnote${bad ? " bad" : ""}">${esc(noteFor(j))}</p>
       ${parts ? `<ul class="parts">${parts}</ul>` : ""}
@@ -570,14 +572,15 @@ function renderLibrary(){
   if (!genres.includes(state.genreFilter)) state.genreFilter = "All";
   $("#genreChips").innerHTML = genres.map(g => `<button class="chip" aria-pressed="${g === state.genreFilter}" data-g="${esc(g)}">${esc(g)}<span class="n">${counts[g] || 0}</span></button>`).join("");
   const q = state.search.toLowerCase();
-  const rows = state.library.filter(s => (state.genreFilter === "All" || s.genre === state.genreFilter) && (!q || s.title.toLowerCase().includes(q) || (s.assetIds || []).some(id => String(id).includes(q))));
+  const rows = state.library.filter(s => (state.genreFilter === "All" || s.genre === state.genreFilter) && (!q || s.title.toLowerCase().includes(q) || String(s.artist || "").toLowerCase().includes(q) || (s.assetIds || []).some(id => String(id).includes(q))));
   $("#libCount").textContent = `${rows.length} of ${state.library.length} songs`;
   if (!state.library.length) { $("#libBody").innerHTML = `<div class="empty">No songs added from the website yet. Upload one from Add songs and it appears here only after Roblox reports moderation approval.</div>`; return; }
   if (!rows.length) { $("#libBody").innerHTML = `<div class="empty">Nothing matches that search.</div>`; return; }
   $("#libBody").innerHTML = `<div class="tablewrap"><table>
-    <thead><tr><th>Title</th><th>Genre</th><th>Convert</th><th>In-game</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
+    <thead><tr><th>Title</th><th>Artist</th><th>Genre</th><th>Convert</th><th>In-game</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
     <tbody>${rows.map(s => `<tr data-id="${esc(s.id)}">
       <td class="t">${esc(s.title)}</td>
+      <td>${esc(s.artist || "Unknown Artist")}</td>
       <td class="g">${esc(s.genre)}${s.sub ? " / " + esc(s.sub) : ""}</td>
       <td>${Number(s.conversionSpeed || (1 / Number(s.speed || 1))).toFixed(1)}×</td>
       <td>${Number(s.speed).toFixed(6)}×</td>
@@ -599,7 +602,7 @@ $("#libBody").addEventListener("click", async e => {
   }
   if (e.target.closest("[data-edit]")) {
     editing = song; const f = $("#editForm");
-    f.title.value = song.title; f.genre.innerHTML = genreOptions(song.genre); f.sub.innerHTML = subOptions(song.genre, song.sub); f.speed.value = song.speed;
+    f.title.value = song.title; f.artist.value = song.artist || ""; f.genre.innerHTML = genreOptions(song.genre); f.sub.innerHTML = subOptions(song.genre, song.sub); f.speed.value = song.speed;
     $("#editErr").textContent = ""; $("#editDlg").showModal();
   }
 });
@@ -607,8 +610,9 @@ $("#editForm").genre.addEventListener("change", e => { $("#editForm").sub.innerH
 $("#editForm").addEventListener("submit", async e => {
   if (e.submitter?.value !== "save") return;
   e.preventDefault();
-  const f = e.target, body = { title: f.title.value.trim(), genre: f.genre.value, sub: f.sub.value, speed: Number(f.speed.value) };
+  const f = e.target, body = { title: f.title.value.trim(), artist: f.artist.value.trim(), genre: f.genre.value, sub: f.sub.value, speed: Number(f.speed.value) };
   if (!body.title) { $("#editErr").textContent = "Title can't be empty."; return; }
+  if (!body.artist) { $("#editErr").textContent = "Artist can't be empty."; return; }
   if (!validSpeed(body.speed)) { $("#editErr").textContent = "In-game playback speed must be between 0.01 and 2."; return; }
   try { await api("/api/library/" + encodeURIComponent(editing.id), { method: "PATCH", body: JSON.stringify(body) }); $("#editDlg").close(); toast("Changes saved"); refreshLibrary(); }
   catch (err) { $("#editErr").textContent = err.message; }

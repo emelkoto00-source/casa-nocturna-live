@@ -149,7 +149,7 @@ dialog form{display:grid;gap:14px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
 .review-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.review-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.review-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .review-card{background:var(--plum);border:1px solid var(--line);border-radius:var(--r);padding:12px}
 .review-card small{display:block;color:var(--ink-3);margin-bottom:4px}
 .review-card strong{font-size:.95rem}
@@ -191,6 +191,13 @@ dialog form{display:grid;gap:14px}
         </label>
 
         <div class="defaults">
+          <label class="f">Upload account
+            <select class="inp" id="defUploader">
+              <option value="wan">WAN</option>
+              <option value="wan2">WAN 2ND</option>
+            </select>
+            <span class="playback">Chooses which community owns the Roblox audio asset.</span>
+          </label>
           <label class="f">Genre for new files
             <select class="inp" id="defGenre"></select>
           </label>
@@ -312,6 +319,7 @@ dialog form{display:grid;gap:14px}
       <div class="review-card"><small>Conversion</small><strong id="reviewConversion">—</strong></div>
       <div class="review-card"><small>Casa PlaybackSpeed</small><strong id="reviewPlayback">—</strong></div>
       <div class="review-card"><small>Asset</small><strong id="reviewAsset">—</strong></div>
+      <div class="review-card"><small>Uploaded from</small><strong id="reviewUploader">—</strong></div>
     </div>
 
     <label class="f" id="reviewPartWrap" hidden>Preview part
@@ -377,11 +385,17 @@ const MAX_FILES = 5, MAX_MB = 200;
 const CONVERSION_SPEEDS = [2.1, 2.3, 2.6, 2.7, 2.9];
 const VOLUME_PRESETS = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
 const AIR_EQ_PRESETS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
+let UPLOADERS = [
+  { id: "wan", name: "WAN", creatorId: "790418153", configured: true },
+  { id: "wan2", name: "WAN 2ND", creatorId: "401704136", configured: true }
+];
 const inverseSpeed = v => 1 / Number(v);
 const playbackText = v => inverseSpeed(v).toFixed(6);
 const conversionOptions = sel => CONVERSION_SPEEDS.map(v => `<option value="${v}"${Number(sel) === v ? " selected" : ""}>${v.toFixed(1)}×</option>`).join("");
 const volumeOptions = sel => VOLUME_PRESETS.map(v => `<option value="${v}"${Math.abs(Number(sel) - v) < 1e-9 ? " selected" : ""}>${v.toFixed(1)} — ${Math.round(v * 100)}%</option>`).join("");
 const airEqOptions = sel => AIR_EQ_PRESETS.map(v => `<option value="${v}"${Math.abs(Number(sel) - v) < 1e-9 ? " selected" : ""}>${v === 0 ? "Off" : `+${v.toFixed(1)} dB`}</option>`).join("");
+const uploaderName = id => UPLOADERS.find(u => u.id === id)?.name || (id === "wan2" ? "WAN 2ND" : "WAN");
+const uploaderOptions = sel => UPLOADERS.map(u => `<option value="${esc(u.id)}"${u.id === sel ? " selected" : ""}${u.configured === false ? " disabled" : ""}>${esc(u.name)}${u.configured === false ? " — unavailable" : ""}</option>`).join("");
 const STAGES = ["uploading", "processing", "moderating", "review", "granting_access", "in_map"];
 const FINAL = new Set(["in_map", "approved", "accepted", "declined", "rejected", "failed", "discarded"]);
 const $ = (s, r = document) => r.querySelector(s);
@@ -412,7 +426,7 @@ async function api(path, opts = {}){
 function uploadFile(item, onProgress){
   const fd = new FormData();
   fd.append("file", item.file); fd.append("title", item.title); fd.append("artist", item.artist); fd.append("conversionSpeed", item.conversionSpeed); fd.append("speed", item.speed);
-  fd.append("genre", item.genre); fd.append("sub", item.sub); fd.append("volume", item.volume); fd.append("airEqDb", item.airEqDb); fd.append("pushToMap", $("#pushToMap").checked ? "1" : "0");
+  fd.append("genre", item.genre); fd.append("sub", item.sub); fd.append("volume", item.volume); fd.append("airEqDb", item.airEqDb); fd.append("uploaderProfile", item.uploaderProfile || "wan"); fd.append("pushToMap", $("#pushToMap").checked ? "1" : "0");
   if (state.mode === "demo") return demo.upload(item, $("#pushToMap").checked, onProgress);
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
@@ -430,8 +444,8 @@ function uploadFile(item, onProgress){
 /* ---------- preview simulation ---------- */
 const demo = {
   jobs: [], lib: [
-    { id: "s1", title: "Sample track", artist: "Sample Artist", genre: "Casa Floor", sub: "Rave Mix", conversionSpeed: 2.3, speed: inverseSpeed(2.3), assetIds: ["100000000000001"], addedAt: Date.now() - 864e5 },
-    { id: "s2", title: "Sample long mix", artist: "Sample Artist", genre: "West Coast", sub: "The Hood", conversionSpeed: 2.7, speed: inverseSpeed(2.7), assetIds: ["100000000000002", "100000000000003"], addedAt: Date.now() - 1728e5 }
+    { id: "s1", title: "Sample track", artist: "Sample Artist", genre: "Casa Floor", sub: "Rave Mix", conversionSpeed: 2.3, speed: inverseSpeed(2.3), sourceUploaderId: "wan", sourceUploader: "WAN", assetIds: ["100000000000001"], addedAt: Date.now() - 864e5 },
+    { id: "s2", title: "Sample long mix", artist: "Sample Artist", genre: "West Coast", sub: "The Hood", conversionSpeed: 2.7, speed: inverseSpeed(2.7), sourceUploaderId: "wan2", sourceUploader: "WAN 2ND", assetIds: ["100000000000002", "100000000000003"], addedAt: Date.now() - 1728e5 }
   ],
   fakeId(){ return String(Math.floor(1e14 + Math.random() * 9e14)); },
   async handle(path, opts){
@@ -451,14 +465,14 @@ const demo = {
       let p = 0; const t = setInterval(() => { p = Math.min(1, p + .2); onProgress(p); if (p >= 1) { clearInterval(t); done(); } }, 180);
       const done = () => {
         const nParts = item.file.size > 12e6 ? 2 : 1;
-        const job = { id: "j" + Date.now() + Math.random().toString(36).slice(2, 6), title: item.title, artist: item.artist, genre: item.genre, sub: item.sub, conversionSpeed: item.conversionSpeed, speed: item.speed, pushToMap: push, stage: "processing", parts: [], createdAt: Date.now() };
+        const job = { id: "j" + Date.now() + Math.random().toString(36).slice(2, 6), title: item.title, artist: item.artist, genre: item.genre, sub: item.sub, conversionSpeed: item.conversionSpeed, speed: item.speed, uploaderProfile: item.uploaderProfile || "wan", uploaderName: uploaderName(item.uploaderProfile || "wan"), pushToMap: push, stage: "processing", parts: [], createdAt: Date.now() };
         this.jobs.unshift(job); resolve({ job });
         const rejected = /reject/i.test(item.file.name);
         setTimeout(() => { job.stage = "moderating"; job.parts = Array.from({ length: nParts }, (_, i) => ({ index: i + 1, assetId: this.fakeId(), status: "pending" })); }, 1600);
         setTimeout(() => {
           if (rejected) { job.stage = "declined"; job.parts.forEach(p => p.status = "declined"); job.error = "Roblox moderation declined this audio."; return; }
           job.parts.forEach(p => p.status = "approved"); job.stage = push ? "in_map" : "approved";
-          if (push) this.lib.unshift({ id: "s" + Date.now(), title: job.title, artist: job.artist, genre: job.genre, sub: job.sub, conversionSpeed: job.conversionSpeed, speed: job.speed, assetIds: job.parts.map(p => p.assetId), addedAt: Date.now() });
+          if (push) this.lib.unshift({ id: "s" + Date.now(), title: job.title, artist: job.artist, genre: job.genre, sub: job.sub, conversionSpeed: job.conversionSpeed, speed: job.speed, sourceUploaderId: job.uploaderProfile, sourceUploader: job.uploaderName, assetIds: job.parts.map(p => p.assetId), addedAt: Date.now() });
         }, 5200);
       };
     });
@@ -475,10 +489,13 @@ async function connect(){
     if (!ct.includes("json")) throw new Error("no api");
     const d = await r.json();
     state.mode = "live"; state.info = d; if (d.genres) GENRES = d.genres;
+    if (Array.isArray(d.uploaders) && d.uploaders.length) UPLOADERS = d.uploaders;
     setConn("live", d.placeName ? "Connected to " + d.placeName : "Connected");
     const banner = $("#demoBanner");
+    const unavailableUploaders = UPLOADERS.filter(u => u.configured === false);
     if (d.simulation) { banner.textContent = "Server is connected in simulation mode. Audio is processed, but fake Roblox asset IDs are generated until SIMULATE_ROBLOX=false."; banner.hidden = false; }
-    else if (!d.robloxConfigured) { banner.textContent = "Server is live, but Roblox Open Cloud is not configured yet. Add ROBLOX_API_KEY and creator settings to your server environment."; banner.hidden = false; }
+    else if (!d.robloxConfigured) { banner.textContent = "Server is live, but Roblox Open Cloud is not configured yet. Check the Roblox API-key and creator variables on Railway."; banner.hidden = false; }
+    else if (unavailableUploaders.length) { banner.textContent = `Uploader unavailable: ${unavailableUploaders.map(u => u.name).join(", ")}. Check that uploader's Railway API-key and creator variables.`; banner.hidden = false; }
     else { banner.hidden = true; }
   } catch {
     state.mode = "off"; state.info = null;
@@ -510,6 +527,14 @@ document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("cl
 function genreOptions(sel){ return Object.keys(GENRES).map(g => `<option${g === sel ? " selected" : ""}>${esc(g)}</option>`).join(""); }
 function subOptions(genre, sel){ const subs = GENRES[genre] || []; return `<option value="">${subs.length ? "None" : "No sub-playlists"}</option>` + subs.map(s => `<option${s === sel ? " selected" : ""}>${esc(s)}</option>`).join(""); }
 function fillGenreSelects(){
+  const uploaderSel = $("#defUploader");
+  const savedUploader = store.get("nocturna.defUploader") || "wan";
+  const usableUploader = UPLOADERS.some(u => u.id === savedUploader && u.configured !== false)
+    ? savedUploader
+    : (UPLOADERS.find(u => u.configured !== false)?.id || "wan");
+  uploaderSel.innerHTML = uploaderOptions(usableUploader);
+  uploaderSel.value = usableUploader;
+
   const g = $("#defGenre"), s = $("#defSub");
   const cur = store.get("nocturna.defGenre"); const genre = GENRES[cur] ? cur : Object.keys(GENRES)[0];
   g.innerHTML = genreOptions(genre); s.innerHTML = subOptions(genre, store.get("nocturna.defSub"));
@@ -518,6 +543,7 @@ function fillGenreSelects(){
   const savedAir = Number(store.get("nocturna.defAirEq"));
   if (AIR_EQ_PRESETS.includes(savedAir)) $("#defAirEq").value = String(savedAir);
 }
+$("#defUploader").addEventListener("change", e => store.set("nocturna.defUploader", e.target.value));
 $("#defGenre").addEventListener("change", e => { store.set("nocturna.defGenre", e.target.value); $("#defSub").innerHTML = subOptions(e.target.value, ""); store.set("nocturna.defSub", ""); });
 $("#defSub").addEventListener("change", e => store.set("nocturna.defSub", e.target.value));
 $("#defVolume").addEventListener("change", e => store.set("nocturna.defVolume", e.target.value));
@@ -537,6 +563,7 @@ function addFiles(list){
     const conversionSpeed = Number($("#defConvert").value || 2.3);
     state.staged.push({
       uid: ++uid, file: f, title: titleFromName(f.name), artist: "",
+      uploaderProfile: $("#defUploader").value || "wan",
       conversionSpeed, speed: inverseSpeed(conversionSpeed),
       volume: Number($("#defVolume").value || 1),
       airEqDb: Number($("#defAirEq").value || 0),
@@ -555,7 +582,10 @@ function renderStaged(){
         <button class="x" data-rm aria-label="Remove ${esc(it.title)}">✕</button>
       </div>
       <p class="fname">${esc(it.file.name)} · ${(it.file.size / 1e6).toFixed(1)} MB</p>
-      <label class="f" style="margin-bottom:10px">Artist <input class="inp" data-k="artist" value="${esc(it.artist || "")}" maxlength="80" placeholder="Artist name" aria-label="Artist name"></label>
+      <div class="srow2" style="margin-bottom:10px">
+        <label class="f">Upload account <select class="inp" data-k="uploaderProfile">${uploaderOptions(it.uploaderProfile || "wan")}</select></label>
+        <label class="f">Artist <input class="inp" data-k="artist" value="${esc(it.artist || "")}" maxlength="80" placeholder="Artist name" aria-label="Artist name"></label>
+      </div>
       <div class="srow3">
         <label class="f speed">Conversion <select class="inp" data-k="conversionSpeed">${conversionOptions(it.conversionSpeed)}</select><span class="playback">In-game ${Number(it.speed).toFixed(6)}×</span></label>
         <label class="f">Casa volume <select class="inp" data-k="volume">${volumeOptions(it.volume)}</select></label>
@@ -593,16 +623,19 @@ function validSpeed(v){ const n = Number(v); return Number.isFinite(n) && n >= 0
 function validConversion(v){ return CONVERSION_SPEEDS.includes(Number(v)); }
 function validVolume(v){ return VOLUME_PRESETS.some(x => Math.abs(x - Number(v)) < 1e-9); }
 function validAirEq(v){ return AIR_EQ_PRESETS.some(x => Math.abs(x - Number(v)) < 1e-9); }
+function validUploader(v){ return UPLOADERS.some(u => u.id === String(v) && u.configured !== false); }
 $("#uploadBtn").addEventListener("click", async () => {
   const err = $("#uploadErr"); err.textContent = "";
   const bad = state.staged.find(it =>
     !it.title.trim() || !String(it.artist || "").trim() ||
+    !validUploader(it.uploaderProfile) ||
     !validConversion(it.conversionSpeed) || !validSpeed(it.speed) ||
     !validVolume(it.volume) || !validAirEq(it.airEqDb)
   );
   if (bad) {
     err.textContent = !bad.title.trim() ? "Every song needs a title."
       : !String(bad.artist || "").trim() ? `Add an artist for "${bad.title}".`
+      : !validUploader(bad.uploaderProfile) ? `Choose an available upload account for "${bad.title}".`
       : !validConversion(bad.conversionSpeed) ? `Choose one of the supported conversion presets for "${bad.title}".`
       : !validVolume(bad.volume) ? `Choose a valid Casa volume for "${bad.title}".`
       : `Choose a valid Air EQ value for "${bad.title}".`;
@@ -620,7 +653,7 @@ $("#uploadBtn").addEventListener("click", async () => {
   state.staged = []; renderStaged();
   const btn = $("#uploadBtn"); btn.disabled = true;
   for (const it of batch) {
-    const local = { id: "local-" + it.uid, title: it.title, artist: it.artist, genre: it.genre, sub: it.sub, conversionSpeed: it.conversionSpeed, speed: it.speed, volume: it.volume, airEqDb: it.airEqDb, stage: "uploading", progress: 0, parts: [], local: true };
+    const local = { id: "local-" + it.uid, title: it.title, artist: it.artist, genre: it.genre, sub: it.sub, conversionSpeed: it.conversionSpeed, speed: it.speed, volume: it.volume, airEqDb: it.airEqDb, uploaderProfile: it.uploaderProfile || "wan", uploaderName: uploaderName(it.uploaderProfile || "wan"), stage: "uploading", progress: 0, parts: [], local: true };
     state.jobs.unshift(local); renderQueue();
     try {
       await uploadFile(it, p => { local.progress = p; renderQueue(); });
@@ -649,7 +682,7 @@ function noteFor(j){
   switch (j.stage) {
     case "uploading": return `Sending file to the server… ${Math.round((j.progress || 0) * 100)}%`;
     case "processing": return `Converting at ${Number(j.conversionSpeed || (1 / j.speed)).toFixed(1)}×; Casa playback will be ${Number(j.speed || 1).toFixed(6)}×.`;
-    case "moderating": return "Uploaded to Roblox. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.";
+    case "moderating": return `Uploaded to Roblox from ${j.uploaderName || uploaderName(j.uploaderProfile)}. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.`;
     case "review": return `Approved by Roblox. Review the preview first: ${Math.round(Number(j.volume ?? 1) * 100)}% Casa volume · ${Number(j.airEqDb ?? 0).toFixed(1)} dB Air EQ.`;
     case "granting_access": return "Review accepted. Giving Casa Nocturna permission to use the audio…";
     case "access_required": return j.error ? `Review accepted, but Casa access is not granted yet. Retrying automatically: ${j.error}` : "Review accepted, but Casa access is not granted yet. Retrying automatically.";
@@ -690,7 +723,7 @@ function renderQueue(){
     const hasLua = (j.parts || []).some(p => p.status === "approved" || p.status === "accepted");
     const reviewButton = j.stage === "review" ? `<button class="btn primary sm" data-review>Review & preview</button>` : "";
     return `<li class="job ${j.stage}" data-id="${esc(j.id)}">
-      <div class="jhead"><span class="jtitle">${esc(j.title)}${j.artist ? `<span class="jmeta" style="display:block">${esc(j.artist)}</span>` : ""}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× Casa · Vol ${Math.round(Number(j.volume ?? 1) * 100)}% · Air ${Number(j.airEqDb ?? 0).toFixed(1)} dB · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
+      <div class="jhead"><span class="jtitle">${esc(j.title)}${j.artist ? `<span class="jmeta" style="display:block">${esc(j.artist)}</span>` : ""}</span><span class="jmeta">${esc(j.uploaderName || uploaderName(j.uploaderProfile))} · ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× Casa · Vol ${Math.round(Number(j.volume ?? 1) * 100)}% · Air ${Number(j.airEqDb ?? 0).toFixed(1)} dB · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
       <div class="stages"><div class="fill" style="width:${fillPct}%"></div>${stages}</div>
       <p class="jnote${bad ? " bad" : ""}">${esc(noteFor(j))}</p>
       ${parts ? `<ul class="parts">${parts}</ul>` : ""}
@@ -755,6 +788,7 @@ function openReview(job){
   f.airEqDb.innerHTML = airEqOptions(job.airEqDb ?? 0);
   $("#reviewConversion").textContent = `${Number(job.conversionSpeed || (1 / (job.speed || 1))).toFixed(1)}×`;
   $("#reviewPlayback").textContent = `${Number(job.speed || 1).toFixed(6)}×`;
+  $("#reviewUploader").textContent = job.uploaderName || uploaderName(job.uploaderProfile);
   const parts = (job.parts || []).filter(p => p.previewFile);
   $("#reviewPartWrap").hidden = parts.length <= 1;
   $("#reviewPart").innerHTML = parts.map(p => `<option value="${p.index}">Part ${p.index}${p.duration ? ` · ${Number(p.duration).toFixed(0)}s` : ""}</option>`).join("");
@@ -811,7 +845,7 @@ $("#reviewProceed").addEventListener("click", async () => {
 });
 $("#reviewDiscard").addEventListener("click", async () => {
   const job = state.jobs.find(x => x.id === reviewJobId); if (!job) return;
-  if (!confirm(`Discard "${job.title}"? The Roblox audio asset stays in WAN MUSIC COMMUNITY, but it will not be added to Casa.`)) return;
+  if (!confirm(`Discard "${job.title}"? The Roblox audio asset stays under ${job.uploaderName || uploaderName(job.uploaderProfile)}, but it will not be added to Casa.`)) return;
   try {
     await api(`/api/jobs/${encodeURIComponent(job.id)}/discard`, { method: "POST" });
     $("#reviewAudio").pause();
@@ -860,15 +894,16 @@ function renderLibrary(){
   if (!genres.includes(state.genreFilter)) state.genreFilter = "All";
   $("#genreChips").innerHTML = genres.map(g => `<button class="chip" aria-pressed="${g === state.genreFilter}" data-g="${esc(g)}">${esc(g)}<span class="n">${counts[g] || 0}</span></button>`).join("");
   const q = state.search.toLowerCase();
-  const rows = state.library.filter(s => (state.genreFilter === "All" || s.genre === state.genreFilter) && (!q || s.title.toLowerCase().includes(q) || String(s.artist || "").toLowerCase().includes(q) || (s.assetIds || []).some(id => String(id).includes(q))));
+  const rows = state.library.filter(s => (state.genreFilter === "All" || s.genre === state.genreFilter) && (!q || s.title.toLowerCase().includes(q) || String(s.artist || "").toLowerCase().includes(q) || String(s.sourceUploader || "").toLowerCase().includes(q) || (s.assetIds || []).some(id => String(id).includes(q))));
   $("#libCount").textContent = `${rows.length} of ${state.library.length} songs`;
   if (!state.library.length) { $("#libBody").innerHTML = `<div class="empty">No songs added from the website yet. Upload one from Add songs and it appears here only after Roblox reports moderation approval.</div>`; return; }
   if (!rows.length) { $("#libBody").innerHTML = `<div class="empty">Nothing matches that search.</div>`; return; }
   $("#libBody").innerHTML = `<div class="tablewrap"><table>
-    <thead><tr><th>Title</th><th>Artist</th><th>Genre</th><th>Convert</th><th>Playback</th><th>Volume</th><th>Air EQ</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
+    <thead><tr><th>Title</th><th>Artist</th><th>Uploader</th><th>Genre</th><th>Convert</th><th>Playback</th><th>Volume</th><th>Air EQ</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
     <tbody>${rows.map(s => `<tr data-id="${esc(s.id)}">
       <td class="t">${esc(s.title)}</td>
       <td>${esc(s.artist || "Unknown Artist")}</td>
+      <td>${esc(s.sourceUploader || uploaderName(s.sourceUploaderId || "wan"))}</td>
       <td class="g">${esc(s.genre)}${s.sub ? " / " + esc(s.sub) : ""}</td>
       <td>${Number(s.conversionSpeed || (1 / Number(s.speed || 1))).toFixed(1)}×</td>
       <td>${Number(s.speed).toFixed(6)}×</td>

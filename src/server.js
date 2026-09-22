@@ -15,8 +15,13 @@ const root = path.resolve(__dirname, '..');
 const publicDir = path.join(root, 'public');
 const uploadDir = path.join(root, 'uploads');
 const processedDir = path.join(root, 'processed');
+const previewDir = path.join(root, 'data', 'previews');
 const dataFile = path.join(root, 'data', 'state.json');
-await Promise.all([fs.mkdir(uploadDir, { recursive: true }), fs.mkdir(processedDir, { recursive: true })]);
+await Promise.all([
+  fs.mkdir(uploadDir, { recursive: true }),
+  fs.mkdir(processedDir, { recursive: true }),
+  fs.mkdir(previewDir, { recursive: true })
+]);
 
 const store = new JsonStore(dataFile);
 await store.load();
@@ -32,7 +37,9 @@ const GENRES = {
   'Budots': []
 };
 const PRESETS = [2.1, 2.3, 2.6, 2.7, 2.9];
-const FINAL = new Set(['in_map', 'approved', 'accepted', 'declined', 'rejected', 'failed']);
+const VOLUMES = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
+const AIR_EQ_DB = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
+const FINAL = new Set(['in_map', 'approved', 'accepted', 'declined', 'rejected', 'failed', 'discarded']);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 200);
 const moderationPollMs = Math.max(5, Number(process.env.ROBLOX_MODERATION_POLL_SECONDS || 15)) * 1000;
 const upload = multer({ dest: uploadDir, limits: { fileSize: maxUploadMb * 1_000_000, files: 1 } });
@@ -64,6 +71,20 @@ function gameAuth(req, res, next) {
 function cleanText(v, max = 80) { return String(v || '').trim().slice(0, max); }
 function validGenre(g) { return Object.prototype.hasOwnProperty.call(GENRES, g); }
 function inverseSpeed(factor) { return Number((1 / Number(factor)).toFixed(9)); }
+function validVolume(value) {
+  const n = Number(value);
+  return VOLUMES.some(v => Math.abs(v - n) < 1e-9);
+}
+function validAirEqDb(value) {
+  const n = Number(value);
+  return AIR_EQ_DB.some(v => Math.abs(v - n) < 1e-9);
+}
+async function cleanupJobPreviews(job) {
+  for (const part of job?.parts || []) {
+    if (!part.previewFile) continue;
+    await fs.rm(path.join(previewDir, path.basename(part.previewFile)), { force: true }).catch(() => {});
+  }
+}
 function approvedPart(p) { return p?.status === 'approved' || p?.status === 'accepted'; }
 function declinedPart(p) { return p?.status === 'declined' || p?.status === 'rejected'; }
 
@@ -73,6 +94,8 @@ app.get('/api/health', (req, res) => {
     placeName: process.env.PLACE_NAME || 'Casa Nocturna',
     genres: GENRES,
     presets: PRESETS,
+    volumes: VOLUMES,
+    airEqDbPresets: AIR_EQ_DB,
     robloxConfigured: roblox.configured,
     simulation: roblox.simulate,
     gameSyncConfigured: Boolean(process.env.GAME_SYNC_TOKEN),
@@ -85,6 +108,8 @@ app.get('/api/health', (req, res) => {
 app.get('/api/jobs', adminAuth, (req, res) => res.json({ jobs: store.state.jobs }));
 app.get('/api/library', adminAuth, (req, res) => res.json({ songs: store.state.library }));
 app.post('/api/jobs/clear', adminAuth, async (req, res) => {
+  const finished = store.state.jobs.filter(j => FINAL.has(j.stage));
+  for (const job of finished) await cleanupJobPreviews(job);
   store.state.jobs = store.state.jobs.filter(j => !FINAL.has(j.stage));
   await store.save();
   res.json({ ok: true });
@@ -102,6 +127,14 @@ app.patch('/api/library/:id', adminAuth, async (req, res) => {
     if (!Number.isFinite(n) || n <= 0 || n > 2) return res.status(400).json({ error: 'Invalid playback speed.' });
     song.speed = n;
     song.conversionSpeed = Number((1 / n).toFixed(6));
+  }
+  if (req.body.volume != null) {
+    if (!validVolume(req.body.volume)) return res.status(400).json({ error: 'Invalid Casa volume.' });
+    song.volume = Number(req.body.volume);
+  }
+  if (req.body.airEqDb != null) {
+    if (!validAirEqDb(req.body.airEqDb)) return res.status(400).json({ error: 'Invalid Air EQ value.' });
+    song.airEqDb = Number(req.body.airEqDb);
   }
   await store.save();
   res.json({ song });
@@ -127,6 +160,8 @@ app.get('/api/game/library', gameAuth, (req, res) => {
       sub: s.sub || '',
       speed: s.speed,
       conversionSpeed: s.conversionSpeed,
+      volume: Number.isFinite(Number(s.volume)) ? Number(s.volume) : 1,
+      airEqDb: Number.isFinite(Number(s.airEqDb)) ? Number(s.airEqDb) : 0,
       assetIds: s.assetIds,
       addedAt: s.addedAt
     }))
@@ -144,21 +179,127 @@ app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   }
   const genre = validGenre(req.body.genre) ? req.body.genre : Object.keys(GENRES)[0];
   const sub = cleanText(req.body.sub, 60);
+  const volume = validVolume(req.body.volume) ? Number(req.body.volume) : 1;
+  const airEqDb = validAirEqDb(req.body.airEqDb) ? Number(req.body.airEqDb) : 0;
   const pushToMap = String(req.body.pushToMap) !== '0';
   const job = {
     id: crypto.randomUUID(), title, artist, genre, sub, conversionSpeed,
-    speed: inverseSpeed(conversionSpeed), pushToMap,
+    speed: inverseSpeed(conversionSpeed), volume, airEqDb, pushToMap,
     stage: 'processing', parts: [], createdAt: Date.now(), originalName: req.file.originalname,
-    moderationGate: true
+    moderationGate: true,
+    reviewRequired: pushToMap,
+    previewToken: crypto.randomBytes(24).toString('hex')
   };
   store.state.jobs.unshift(job);
   await store.save();
   res.status(202).json({ job });
   processJob(job, req.file.path).catch(async err => {
     job.stage = 'failed'; job.error = err.message || String(err); job.finishedAt = Date.now();
+    await cleanupJobPreviews(job);
     await store.save();
     await fs.rm(req.file.path, { force: true }).catch(() => {});
   });
+});
+
+
+app.get('/api/jobs/:id/preview/:part', async (req, res) => {
+  const job = store.state.jobs.find(j => j.id === req.params.id);
+  if (!job) return res.status(404).end();
+  const token = String(req.query.token || '');
+  if (!job.previewToken || !constantEqual(token, job.previewToken)) return res.status(403).end();
+
+  const partIndex = Number(req.params.part);
+  const part = (job.parts || []).find(p => Number(p.index) === partIndex);
+  if (!part?.previewFile) return res.status(404).end();
+
+  const file = path.join(previewDir, path.basename(part.previewFile));
+  try {
+    await fs.access(file);
+    res.set('Cache-Control', 'private, no-store');
+    res.sendFile(file);
+  } catch {
+    res.status(404).end();
+  }
+});
+
+app.patch('/api/jobs/:id/review', adminAuth, async (req, res) => {
+  const job = store.state.jobs.find(j => j.id === req.params.id);
+  if (!job) return res.status(404).json({ error: 'Upload job not found.' });
+  if (job.stage !== 'review') return res.status(409).json({ error: 'This upload is not waiting for review.' });
+
+  if (req.body.title != null) {
+    const title = cleanText(req.body.title);
+    if (!title) return res.status(400).json({ error: 'Title cannot be empty.' });
+    job.title = title;
+  }
+  if (req.body.artist != null) {
+    const artist = cleanText(req.body.artist);
+    if (!artist) return res.status(400).json({ error: 'Artist cannot be empty.' });
+    job.artist = artist;
+  }
+  if (req.body.genre != null) {
+    if (!validGenre(req.body.genre)) return res.status(400).json({ error: 'Invalid genre.' });
+    job.genre = req.body.genre;
+  }
+  if (req.body.sub != null) job.sub = cleanText(req.body.sub, 60);
+  if (req.body.volume != null) {
+    if (!validVolume(req.body.volume)) return res.status(400).json({ error: 'Invalid Casa volume.' });
+    job.volume = Number(req.body.volume);
+  }
+  if (req.body.airEqDb != null) {
+    if (!validAirEqDb(req.body.airEqDb)) return res.status(400).json({ error: 'Invalid Air EQ value.' });
+    job.airEqDb = Number(req.body.airEqDb);
+  }
+
+  job.reviewUpdatedAt = Date.now();
+  await store.save();
+  res.json({ job });
+});
+
+app.post('/api/jobs/:id/proceed', adminAuth, async (req, res) => {
+  const job = store.state.jobs.find(j => j.id === req.params.id);
+  if (!job) return res.status(404).json({ error: 'Upload job not found.' });
+  if (job.stage !== 'review') return res.status(409).json({ error: 'This upload is not waiting for review.' });
+
+  job.reviewDecision = 'proceed';
+  job.reviewedAt = Date.now();
+  job.stage = 'granting_access';
+  job.error = undefined;
+  await store.save();
+  res.status(202).json({ job });
+
+  (async () => {
+    const granted = await grantCasaAccess(job);
+    if (!granted) {
+      monitorCasaAccess(job).catch(err => console.error('[Casa access monitor]', err));
+      return;
+    }
+    await addApprovedJobToLibrary(job);
+    job.stage = 'in_map';
+    job.finishedAt = Date.now();
+    job.error = undefined;
+    await cleanupJobPreviews(job);
+    await store.save();
+  })().catch(async err => {
+    job.stage = 'access_required';
+    job.error = err.message || String(err);
+    await store.save();
+    monitorCasaAccess(job).catch(monitorErr => console.error('[Casa access monitor]', monitorErr));
+  });
+});
+
+app.post('/api/jobs/:id/discard', adminAuth, async (req, res) => {
+  const job = store.state.jobs.find(j => j.id === req.params.id);
+  if (!job) return res.status(404).json({ error: 'Upload job not found.' });
+  if (job.stage !== 'review') return res.status(409).json({ error: 'Only a track waiting for review can be discarded here.' });
+
+  job.reviewDecision = 'discarded';
+  job.stage = 'discarded';
+  job.finishedAt = Date.now();
+  job.error = undefined;
+  await cleanupJobPreviews(job);
+  await store.save();
+  res.json({ job });
 });
 
 async function addApprovedJobToLibrary(job) {
@@ -167,6 +308,8 @@ async function addApprovedJobToLibrary(job) {
       id: crypto.randomUUID(), jobId: job.id,
       title: job.title, artist: job.artist || 'Unknown Artist', genre: job.genre, sub: job.sub,
       conversionSpeed: job.conversionSpeed, speed: job.speed,
+      volume: Number.isFinite(Number(job.volume)) ? Number(job.volume) : 1,
+      airEqDb: Number.isFinite(Number(job.airEqDb)) ? Number(job.airEqDb) : 0,
       assetIds: job.parts.map(p => p.assetId), addedAt: Date.now(),
       moderationStatus: 'approved',
       accessStatus: 'granted',
@@ -235,6 +378,7 @@ async function monitorCasaAccess(job) {
         job.stage = 'in_map';
         job.finishedAt = Date.now();
         job.error = undefined;
+        await cleanupJobPreviews(job);
         await store.save();
         return;
       }
@@ -247,17 +391,14 @@ async function monitorCasaAccess(job) {
 
 async function finalizeApprovedJob(job) {
   if (job.pushToMap) {
-    const granted = await grantCasaAccess(job);
-    if (!granted) {
-      monitorCasaAccess(job).catch(err => console.error('[Casa access monitor]', err));
-      return;
-    }
-    await addApprovedJobToLibrary(job);
-    job.stage = 'in_map';
+    job.stage = 'review';
+    job.reviewReadyAt = Date.now();
+    job.finishedAt = undefined;
   } else {
     job.stage = 'approved';
+    job.finishedAt = Date.now();
+    await cleanupJobPreviews(job);
   }
-  job.finishedAt = Date.now();
   job.error = undefined;
   await store.save();
 }
@@ -266,6 +407,7 @@ async function finalizeDeclinedJob(job) {
   job.stage = 'declined';
   job.error = job.parts.find(declinedPart)?.moderationLabel || 'Roblox moderation declined this audio.';
   job.finishedAt = Date.now();
+  await cleanupJobPreviews(job);
   await store.save();
 }
 
@@ -330,9 +472,24 @@ function processJob(job, inputPath) {
         maxPartSeconds: Number(process.env.ROBLOX_MAX_UPLOAD_SECONDS || 360)
       });
 
+      const previewByIndex = new Map();
+      if (job.pushToMap) {
+        for (const part of parts) {
+          const ext = path.extname(part.file) || '.mp3';
+          const previewFile = `${job.id}-part-${String(part.index).padStart(3, '0')}${ext}`;
+          await fs.copyFile(part.file, path.join(previewDir, previewFile));
+          previewByIndex.set(part.index, previewFile);
+        }
+      }
+
       job.stage = 'moderating';
       job.moderationStartedAt = Date.now();
-      job.parts = parts.map(p => ({ index: p.index, status: 'pending', duration: p.duration }));
+      job.parts = parts.map(p => ({
+        index: p.index,
+        status: 'pending',
+        duration: p.duration,
+        previewFile: previewByIndex.get(p.index) || null
+      }));
       await store.save();
 
       for (const part of parts) {

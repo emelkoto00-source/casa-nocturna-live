@@ -75,9 +75,10 @@ label.f{display:grid;gap:5px;font-size:.82rem;color:var(--ink-2)}
 .srow1{display:flex;gap:10px;align-items:center;margin-bottom:10px}
 .srow1 .inp{flex:1}
 .fname{font-size:.78rem;color:var(--ink-3);margin:-4px 0 8px;overflow-wrap:anywhere}
-.srow2{display:grid;grid-template-columns:90px 1fr 1fr;gap:8px}
+.srow2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.srow3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}
 @media (max-width:720px){.defaults{grid-template-columns:1fr 1fr}}
-@media (max-width:520px){.srow2{grid-template-columns:1fr 1fr}.srow2 .speed{grid-column:1/-1}.defaults{grid-template-columns:1fr}}
+@media (max-width:520px){.srow2,.srow3{grid-template-columns:1fr}.defaults{grid-template-columns:1fr}}
 .x{background:none;border:1px solid var(--line);border-radius:var(--r-sm);width:36px;height:36px;cursor:pointer;color:var(--ink-3);flex:none}
 .x:hover{color:var(--bad);border-color:var(--bad)}
 
@@ -146,6 +147,15 @@ dialog form{display:grid;gap:14px}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--plum);padding:10px 18px;border-radius:999px;font-weight:500;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.review-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.review-card{background:var(--plum);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.review-card small{display:block;color:var(--ink-3);margin-bottom:4px}
+.review-card strong{font-size:.95rem}
+.review-player{width:100%;margin-top:8px}
+.review-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+@media(max-width:620px){.review-grid,.review-meta{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -167,7 +177,7 @@ dialog form{display:grid;gap:14px}
 <main class="wrap">
   <section class="view" id="view-add">
     <h1>Drop a track, it lands in the club.</h1>
-    <p class="lede">Songs upload to Roblox, wait for moderation, then join Casa Nocturna's music library on their own. No Studio, no republish.</p>
+    <p class="lede">Songs upload to Roblox, wait for moderation, then stop for your review before they can join Casa Nocturna's live library.</p>
 
     <div class="grid">
       <div class="panel">
@@ -197,12 +207,26 @@ dialog form{display:grid;gap:14px}
             </select>
             <span class="playback" id="defPlayback">In-game: 0.434783×</span>
           </label>
+          <label class="f">Casa volume
+            <select class="inp" id="defVolume">
+              <option value="1">1.0 — 100%</option><option value="0.9">0.9 — 90%</option><option value="0.8">0.8 — 80%</option>
+              <option value="0.7">0.7 — 70%</option><option value="0.6">0.6 — 60%</option><option value="0.5">0.5 — 50%</option>
+              <option value="0.4">0.4 — 40%</option><option value="0.3">0.3 — 30%</option><option value="0.2">0.2 — 20%</option><option value="0.1">0.1 — 10%</option>
+            </select>
+          </label>
+          <label class="f">Air EQ
+            <select class="inp" id="defAirEq">
+              <option value="0">Off</option><option value="0.5">+0.5 dB</option><option value="1">+1.0 dB</option>
+              <option value="1.5">+1.5 dB</option><option value="2" selected>+2.0 dB</option><option value="2.5">+2.5 dB</option>
+              <option value="3">+3.0 dB</option><option value="3.5">+3.5 dB</option><option value="4">+4.0 dB</option>
+            </select>
+          </label>
         </div>
-        <p class="preset-note"><b>Speed mapping:</b> the server creates the selected converted copy and stores the inverse playback speed for the game. Example: 2.3× conversion → 0.434783× in-game playback.</p>
+        <p class="preset-note"><b>Review flow:</b> after Roblox reports approval, the track pauses at Review. The preview applies the stored Casa playback speed, Casa volume, and Air EQ before you decide whether to add it to the live map.</p>
 
         <ul class="staged" id="staged"></ul>
 
-        <label class="check"><input type="checkbox" id="pushToMap" checked> Add to the map automatically once Roblox accepts it</label>
+        <label class="check"><input type="checkbox" id="pushToMap" checked> Stop for review after Roblox approves it, then let me decide whether to add it to the map</label>
 
         <div class="actions">
           <button class="btn primary" id="uploadBtn" disabled>Upload songs</button>
@@ -223,7 +247,7 @@ dialog form{display:grid;gap:14px}
 
   <section class="view" id="view-library" hidden>
     <h1>Library</h1>
-    <p class="lede">Everything the live music system loads from the website. Conversion speed is stored alongside the inverse in-game playback speed used by your existing music system.</p>
+    <p class="lede">Everything the live music system loads from the website. Playback speed, Casa volume, and per-track Air EQ are stored with each approved song and update live.</p>
     <div class="libtools">
       <input class="inp" id="search" type="search" placeholder="Search titles, artists, or asset IDs" aria-label="Search library">
       <span class="count" id="libCount"></span>
@@ -243,10 +267,82 @@ dialog form{display:grid;gap:14px}
       <label class="f">Sub-playlist <select class="inp" name="sub"></select></label>
     </div>
     <label class="f">In-game playback speed <input class="inp" name="speed" type="number" min="0.01" max="2" step="0.000001" required><span class="playback">This is the value your PlaylistModule uses.</span></label>
+    <div class="two">
+      <label class="f">Casa volume
+        <select class="inp" name="volume">
+          <option value="1">1.0 — 100%</option><option value="0.9">0.9 — 90%</option><option value="0.8">0.8 — 80%</option>
+          <option value="0.7">0.7 — 70%</option><option value="0.6">0.6 — 60%</option><option value="0.5">0.5 — 50%</option>
+          <option value="0.4">0.4 — 40%</option><option value="0.3">0.3 — 30%</option><option value="0.2">0.2 — 20%</option><option value="0.1">0.1 — 10%</option>
+        </select>
+      </label>
+      <label class="f">Air EQ
+        <select class="inp" name="airEqDb">
+          <option value="0">Off</option><option value="0.5">+0.5 dB</option><option value="1">+1.0 dB</option>
+          <option value="1.5">+1.5 dB</option><option value="2">+2.0 dB</option><option value="2.5">+2.5 dB</option>
+          <option value="3">+3.0 dB</option><option value="3.5">+3.5 dB</option><option value="4">+4.0 dB</option>
+        </select>
+      </label>
+    </div>
     <p class="err" id="editErr"></p>
     <div class="actions" style="margin-top:0">
       <button class="btn primary" value="save">Save changes</button>
       <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="reviewDlg">
+  <form method="dialog" id="reviewForm">
+    <div style="display:flex;align-items:flex-start;gap:12px">
+      <div>
+        <h2 style="margin-bottom:4px">Review approved track</h2>
+        <p class="sub" style="margin:0">Listen with the Casa playback settings before granting access and adding it to the live library.</p>
+      </div>
+      <span class="pill ok" style="margin-left:auto">Roblox approved</span>
+    </div>
+
+    <div class="review-grid">
+      <label class="f">Title <input class="inp" name="title" maxlength="80" required></label>
+      <label class="f">Artist <input class="inp" name="artist" maxlength="80" required></label>
+      <label class="f">Genre <select class="inp" name="genre"></select></label>
+      <label class="f">Sub-playlist <select class="inp" name="sub"></select></label>
+    </div>
+
+    <div class="review-meta">
+      <div class="review-card"><small>Conversion</small><strong id="reviewConversion">—</strong></div>
+      <div class="review-card"><small>Casa PlaybackSpeed</small><strong id="reviewPlayback">—</strong></div>
+      <div class="review-card"><small>Asset</small><strong id="reviewAsset">—</strong></div>
+    </div>
+
+    <label class="f" id="reviewPartWrap" hidden>Preview part
+      <select class="inp" id="reviewPart"></select>
+    </label>
+    <audio id="reviewAudio" class="review-player" controls preload="metadata"></audio>
+    <p class="hint">The website preview plays the processed file at the stored Casa PlaybackSpeed and applies the selected Casa volume plus an approximate high-shelf Air EQ. Roblox's in-game EQ is a broad high band, so the browser preview is a close check, not a bit-for-bit emulator.</p>
+
+    <div class="two">
+      <label class="f">Casa volume
+        <select class="inp" name="volume">
+          <option value="1">1.0 — 100%</option><option value="0.9">0.9 — 90%</option><option value="0.8">0.8 — 80%</option>
+          <option value="0.7">0.7 — 70%</option><option value="0.6">0.6 — 60%</option><option value="0.5">0.5 — 50%</option>
+          <option value="0.4">0.4 — 40%</option><option value="0.3">0.3 — 30%</option><option value="0.2">0.2 — 20%</option><option value="0.1">0.1 — 10%</option>
+        </select>
+      </label>
+      <label class="f">Air EQ
+        <select class="inp" name="airEqDb">
+          <option value="0">Off</option><option value="0.5">+0.5 dB</option><option value="1">+1.0 dB</option>
+          <option value="1.5">+1.5 dB</option><option value="2">+2.0 dB</option><option value="2.5">+2.5 dB</option>
+          <option value="3">+3.0 dB</option><option value="3.5">+3.5 dB</option><option value="4">+4.0 dB</option>
+        </select>
+      </label>
+    </div>
+
+    <p class="err" id="reviewErr"></p>
+    <div class="review-actions">
+      <button class="btn primary" type="button" id="reviewProceed">Yes — add to map</button>
+      <button class="btn ghost" type="button" id="reviewSave">Save settings</button>
+      <button class="btn ghost" type="button" id="reviewDiscard">Discard</button>
+      <button class="btn ghost" value="cancel" type="submit">Close</button>
     </div>
   </form>
 </dialog>
@@ -279,11 +375,15 @@ let GENRES = {
 };
 const MAX_FILES = 5, MAX_MB = 200;
 const CONVERSION_SPEEDS = [2.1, 2.3, 2.6, 2.7, 2.9];
+const VOLUME_PRESETS = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
+const AIR_EQ_PRESETS = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
 const inverseSpeed = v => 1 / Number(v);
 const playbackText = v => inverseSpeed(v).toFixed(6);
 const conversionOptions = sel => CONVERSION_SPEEDS.map(v => `<option value="${v}"${Number(sel) === v ? " selected" : ""}>${v.toFixed(1)}×</option>`).join("");
-const STAGES = ["uploading", "processing", "moderating", "granting_access", "in_map"];
-const FINAL = new Set(["in_map", "approved", "accepted", "declined", "rejected", "failed"]);
+const volumeOptions = sel => VOLUME_PRESETS.map(v => `<option value="${v}"${Math.abs(Number(sel) - v) < 1e-9 ? " selected" : ""}>${v.toFixed(1)} — ${Math.round(v * 100)}%</option>`).join("");
+const airEqOptions = sel => AIR_EQ_PRESETS.map(v => `<option value="${v}"${Math.abs(Number(sel) - v) < 1e-9 ? " selected" : ""}>${v === 0 ? "Off" : `+${v.toFixed(1)} dB`}</option>`).join("");
+const STAGES = ["uploading", "processing", "moderating", "review", "granting_access", "in_map"];
+const FINAL = new Set(["in_map", "approved", "accepted", "declined", "rejected", "failed", "discarded"]);
 const $ = (s, r = document) => r.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const store = {
@@ -312,7 +412,7 @@ async function api(path, opts = {}){
 function uploadFile(item, onProgress){
   const fd = new FormData();
   fd.append("file", item.file); fd.append("title", item.title); fd.append("artist", item.artist); fd.append("conversionSpeed", item.conversionSpeed); fd.append("speed", item.speed);
-  fd.append("genre", item.genre); fd.append("sub", item.sub); fd.append("pushToMap", $("#pushToMap").checked ? "1" : "0");
+  fd.append("genre", item.genre); fd.append("sub", item.sub); fd.append("volume", item.volume); fd.append("airEqDb", item.airEqDb); fd.append("pushToMap", $("#pushToMap").checked ? "1" : "0");
   if (state.mode === "demo") return demo.upload(item, $("#pushToMap").checked, onProgress);
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
@@ -413,9 +513,15 @@ function fillGenreSelects(){
   const g = $("#defGenre"), s = $("#defSub");
   const cur = store.get("nocturna.defGenre"); const genre = GENRES[cur] ? cur : Object.keys(GENRES)[0];
   g.innerHTML = genreOptions(genre); s.innerHTML = subOptions(genre, store.get("nocturna.defSub"));
+  const savedVolume = Number(store.get("nocturna.defVolume"));
+  if (VOLUME_PRESETS.includes(savedVolume)) $("#defVolume").value = String(savedVolume);
+  const savedAir = Number(store.get("nocturna.defAirEq"));
+  if (AIR_EQ_PRESETS.includes(savedAir)) $("#defAirEq").value = String(savedAir);
 }
 $("#defGenre").addEventListener("change", e => { store.set("nocturna.defGenre", e.target.value); $("#defSub").innerHTML = subOptions(e.target.value, ""); store.set("nocturna.defSub", ""); });
 $("#defSub").addEventListener("change", e => store.set("nocturna.defSub", e.target.value));
+$("#defVolume").addEventListener("change", e => store.set("nocturna.defVolume", e.target.value));
+$("#defAirEq").addEventListener("change", e => store.set("nocturna.defAirEq", e.target.value));
 function syncDefaultPlayback(){ $("#defPlayback").textContent = `In-game: ${playbackText($("#defConvert").value)}×`; }
 $("#defConvert").addEventListener("change", syncDefaultPlayback);
 
@@ -429,7 +535,13 @@ function addFiles(list){
     if (!/^(audio|video)\//.test(f.type) && !/\.(mp3|wav|ogg|flac|m4a|mp4|mov|webm)$/i.test(f.name)) { skipped.push(`${f.name} (not audio or video)`); continue; }
     if (f.size > MAX_MB * 1e6) { skipped.push(`${f.name} (over ${MAX_MB} MB)`); continue; }
     const conversionSpeed = Number($("#defConvert").value || 2.3);
-    state.staged.push({ uid: ++uid, file: f, title: titleFromName(f.name), artist: "", conversionSpeed, speed: inverseSpeed(conversionSpeed), genre: $("#defGenre").value, sub: $("#defSub").value });
+    state.staged.push({
+      uid: ++uid, file: f, title: titleFromName(f.name), artist: "",
+      conversionSpeed, speed: inverseSpeed(conversionSpeed),
+      volume: Number($("#defVolume").value || 1),
+      airEqDb: Number($("#defAirEq").value || 0),
+      genre: $("#defGenre").value, sub: $("#defSub").value
+    });
   }
   if (skipped.length) $("#uploadErr").textContent = "Skipped: " + skipped.join("; ");
   renderStaged();
@@ -444,8 +556,12 @@ function renderStaged(){
       </div>
       <p class="fname">${esc(it.file.name)} · ${(it.file.size / 1e6).toFixed(1)} MB</p>
       <label class="f" style="margin-bottom:10px">Artist <input class="inp" data-k="artist" value="${esc(it.artist || "")}" maxlength="80" placeholder="Artist name" aria-label="Artist name"></label>
-      <div class="srow2">
+      <div class="srow3">
         <label class="f speed">Conversion <select class="inp" data-k="conversionSpeed">${conversionOptions(it.conversionSpeed)}</select><span class="playback">In-game ${Number(it.speed).toFixed(6)}×</span></label>
+        <label class="f">Casa volume <select class="inp" data-k="volume">${volumeOptions(it.volume)}</select></label>
+        <label class="f">Air EQ <select class="inp" data-k="airEqDb">${airEqOptions(it.airEqDb)}</select></label>
+      </div>
+      <div class="srow2">
         <label class="f">Genre <select class="inp" data-k="genre">${genreOptions(it.genre)}</select></label>
         <label class="f">Sub-playlist <select class="inp" data-k="sub">${subOptions(it.genre, it.sub)}</select></label>
       </div>
@@ -458,7 +574,7 @@ function renderStaged(){
 $("#staged").addEventListener("input", e => {
   const li = e.target.closest("li"), k = e.target.dataset.k; if (!li || !k) return;
   const it = state.staged.find(x => x.uid == li.dataset.uid);
-  it[k] = k === "conversionSpeed" ? Number(e.target.value) : e.target.value;
+  it[k] = ["conversionSpeed", "volume", "airEqDb"].includes(k) ? Number(e.target.value) : e.target.value;
   if (k === "conversionSpeed") { it.speed = inverseSpeed(it.conversionSpeed); const p = li.querySelector(".playback"); if (p) p.textContent = `In-game ${it.speed.toFixed(6)}×`; }
   if (k === "genre") { it.sub = ""; li.querySelector("[data-k=sub]").innerHTML = subOptions(it.genre, ""); }
 });
@@ -475,15 +591,36 @@ drop.addEventListener("drop", e => addFiles(e.dataTransfer.files));
 /* ---------- uploading ---------- */
 function validSpeed(v){ const n = Number(v); return Number.isFinite(n) && n >= 0.01 && n <= 2; }
 function validConversion(v){ return CONVERSION_SPEEDS.includes(Number(v)); }
+function validVolume(v){ return VOLUME_PRESETS.some(x => Math.abs(x - Number(v)) < 1e-9); }
+function validAirEq(v){ return AIR_EQ_PRESETS.some(x => Math.abs(x - Number(v)) < 1e-9); }
 $("#uploadBtn").addEventListener("click", async () => {
   const err = $("#uploadErr"); err.textContent = "";
-  const bad = state.staged.find(it => !it.title.trim() || !String(it.artist || "").trim() || !validConversion(it.conversionSpeed) || !validSpeed(it.speed));
-  if (bad) { err.textContent = !bad.title.trim() ? "Every song needs a title." : !String(bad.artist || "").trim() ? `Add an artist for "${bad.title}".` : `Choose one of the supported conversion presets for "${bad.title}".`; return; }
-  const batch = state.staged.map(it => ({ ...it, title: it.title.trim(), artist: String(it.artist || "").trim(), conversionSpeed: Number(it.conversionSpeed), speed: inverseSpeed(it.conversionSpeed) }));
+  const bad = state.staged.find(it =>
+    !it.title.trim() || !String(it.artist || "").trim() ||
+    !validConversion(it.conversionSpeed) || !validSpeed(it.speed) ||
+    !validVolume(it.volume) || !validAirEq(it.airEqDb)
+  );
+  if (bad) {
+    err.textContent = !bad.title.trim() ? "Every song needs a title."
+      : !String(bad.artist || "").trim() ? `Add an artist for "${bad.title}".`
+      : !validConversion(bad.conversionSpeed) ? `Choose one of the supported conversion presets for "${bad.title}".`
+      : !validVolume(bad.volume) ? `Choose a valid Casa volume for "${bad.title}".`
+      : `Choose a valid Air EQ value for "${bad.title}".`;
+    return;
+  }
+  const batch = state.staged.map(it => ({
+    ...it,
+    title: it.title.trim(),
+    artist: String(it.artist || "").trim(),
+    conversionSpeed: Number(it.conversionSpeed),
+    speed: inverseSpeed(it.conversionSpeed),
+    volume: Number(it.volume),
+    airEqDb: Number(it.airEqDb)
+  }));
   state.staged = []; renderStaged();
   const btn = $("#uploadBtn"); btn.disabled = true;
   for (const it of batch) {
-    const local = { id: "local-" + it.uid, title: it.title, artist: it.artist, genre: it.genre, sub: it.sub, stage: "uploading", progress: 0, parts: [], local: true };
+    const local = { id: "local-" + it.uid, title: it.title, artist: it.artist, genre: it.genre, sub: it.sub, conversionSpeed: it.conversionSpeed, speed: it.speed, volume: it.volume, airEqDb: it.airEqDb, stage: "uploading", progress: 0, parts: [], local: true };
     state.jobs.unshift(local); renderQueue();
     try {
       await uploadFile(it, p => { local.progress = p; renderQueue(); });
@@ -496,22 +633,30 @@ $("#uploadBtn").addEventListener("click", async () => {
   schedulePoll(true);
 });
 
-/* ---------- queue ---------- */
-function stageIndex(j){ return (j.stage === "approved" || j.stage === "accepted") ? 4 : (j.stage === "declined" || j.stage === "rejected") ? 2 : j.stage === "access_required" ? 3 : Math.max(0, STAGES.indexOf(j.stage)); }
+/* ---------- queue + review gate ---------- */
+function stageIndex(j){
+  if (j.stage === "approved" || j.stage === "accepted") return 5;
+  if (j.stage === "declined" || j.stage === "rejected") return 2;
+  if (j.stage === "access_required") return 4;
+  if (j.stage === "discarded") return 3;
+  return Math.max(0, STAGES.indexOf(j.stage));
+}
 function luaFor(j){
   const ok = (j.parts || []).filter(p => p.status === "approved" || p.status === "accepted"); const n = ok.length;
-  return ok.map(p => `\t{ id = ${p.assetId}, title = ${JSON.stringify(n > 1 ? `${j.title} (${p.index}/${n})` : j.title)}, artist = ${JSON.stringify(j.artist || "Unknown Artist")}, speed = ${Number(j.speed ?? 1).toFixed(6)}, genre = ${JSON.stringify(j.genre)}${j.sub ? `, sub = ${JSON.stringify(j.sub)}` : ""} }, -- converted ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}x`).join("\n");
+  return ok.map(p => `\t{ id = ${p.assetId}, title = ${JSON.stringify(n > 1 ? `${j.title} (${p.index}/${n})` : j.title)}, artist = ${JSON.stringify(j.artist || "Unknown Artist")}, speed = ${Number(j.speed ?? 1).toFixed(6)}, volume = ${Number(j.volume ?? 1).toFixed(1)}, airEqDb = ${Number(j.airEqDb ?? 0).toFixed(1)}, genre = ${JSON.stringify(j.genre)}${j.sub ? `, sub = ${JSON.stringify(j.sub)}` : ""} }, -- converted ${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}x`).join("\n");
 }
 function noteFor(j){
   switch (j.stage) {
     case "uploading": return `Sending file to the server… ${Math.round((j.progress || 0) * 100)}%`;
-    case "processing": return `Converting at ${Number(j.conversionSpeed || (1 / j.speed)).toFixed(1)}×; game playback will be ${Number(j.speed || 1).toFixed(6)}×.`;
+    case "processing": return `Converting at ${Number(j.conversionSpeed || (1 / j.speed)).toFixed(1)}×; Casa playback will be ${Number(j.speed || 1).toFixed(6)}×.`;
     case "moderating": return "Uploaded to Roblox. Waiting for a real moderation decision. It will not enter the live library until Roblox reports approval.";
-    case "granting_access": return "Approved by Roblox. Giving Casa Nocturna permission to use the audio…";
-    case "access_required": return j.error ? `Approved, but Casa access is not granted yet. Retrying automatically: ${j.error}` : "Approved, but Casa access is not granted yet. Retrying automatically.";
-    case "in_map": return "Approved by Roblox and added to the live library.";
-    case "approved": return "Approved by Roblox. Not added to the map, so copy the IDs if you need them.";
-    case "accepted": return "Approved by Roblox. Not added to the map, so copy the IDs if you need them.";
+    case "review": return `Approved by Roblox. Review the preview first: ${Math.round(Number(j.volume ?? 1) * 100)}% Casa volume · ${Number(j.airEqDb ?? 0).toFixed(1)} dB Air EQ.`;
+    case "granting_access": return "Review accepted. Giving Casa Nocturna permission to use the audio…";
+    case "access_required": return j.error ? `Review accepted, but Casa access is not granted yet. Retrying automatically: ${j.error}` : "Review accepted, but Casa access is not granted yet. Retrying automatically.";
+    case "in_map": return "Approved by Roblox, reviewed by you, and added to the live library.";
+    case "approved": return "Approved by Roblox. Not selected for the map, so copy the IDs if you need them.";
+    case "accepted": return "Approved by Roblox. Not selected for the map, so copy the IDs if you need them.";
+    case "discarded": return "You discarded this approved upload. It was not added to Casa.";
     case "declined": return j.error || "Roblox moderation declined this audio. It was not added to the map.";
     case "rejected": return j.error || "Roblox moderation declined this audio. It was not added to the map.";
     case "failed": return j.error || "Something went wrong. Check the server log.";
@@ -520,28 +665,166 @@ function noteFor(j){
 }
 function renderQueue(){
   const ul = $("#queue");
-  if (!state.jobs.length) { ul.innerHTML = `<li class="empty">Uploads show up here with their moderation status.</li>`; return; }
+  if (!state.jobs.length) { ul.innerHTML = `<li class="empty">Uploads show up here with their moderation and review status.</li>`; return; }
   ul.innerHTML = state.jobs.map(j => {
-    const idx = stageIndex(j), bad = j.stage === "declined" || j.stage === "rejected" || j.stage === "failed", finished = j.stage === "in_map" || j.stage === "approved" || j.stage === "accepted";
-    const labels = ["Upload", "Split", "Moderation", j.pushToMap === false ? "Ready" : "Access", j.pushToMap === false ? "Done" : "In map"];
-    const fillPct = finished ? 100 : (idx / 4) * 100;
+    const idx = stageIndex(j);
+    const bad = ["declined","rejected","failed"].includes(j.stage);
+    const finished = ["in_map","approved","accepted"].includes(j.stage);
+    const labels = ["Upload", "Split", "Moderation", j.pushToMap === false ? "Ready" : "Review", j.pushToMap === false ? "Done" : "Access", j.pushToMap === false ? "Done" : "In map"];
+    const fillPct = finished ? 100 : (idx / 5) * 100;
     const stages = labels.map((l, i) => {
-      let c = i < idx || (finished && i === 4) ? "done" : i === idx ? (bad ? "bad" : "now") : "";
+      let c = i < idx || (finished && i === 5) ? "done" : i === idx ? (bad ? "bad" : "now") : "";
       return `<div class="stage ${c}"><b></b><span>${l}</span></div>`;
     }).join("");
-    const parts = (j.parts || []).map(p => { const ok = p.status === "approved" || p.status === "accepted"; const bad = p.status === "declined" || p.status === "rejected"; const label = ok ? "Approved" : bad ? "Declined" : "Pending"; const access = p.accessStatus === "granted" ? `<span class="pill ok" title="Casa Nocturna has Use permission">Casa access</span>` : p.accessStatus === "failed" ? `<span class="pill wait" title="${esc(p.accessError || "Access retrying")}">Access retrying</span>` : ""; return `<li><code>rbxassetid://${esc(p.assetId || "pending")}</code>${j.parts.length > 1 ? `<span class="jmeta">Part ${p.index}</span>` : ""}<span class="pill ${ok ? "ok" : bad ? "bad" : "wait"}" title="${esc(p.moderationLabel || label)}">${label}</span>${access}</li>`; }).join("");
+    const parts = (j.parts || []).map(p => {
+      const ok = p.status === "approved" || p.status === "accepted";
+      const declined = p.status === "declined" || p.status === "rejected";
+      const label = ok ? "Approved" : declined ? "Declined" : "Pending";
+      const access = p.accessStatus === "granted"
+        ? `<span class="pill ok" title="Casa Nocturna has Use permission">Casa access</span>`
+        : p.accessStatus === "failed"
+          ? `<span class="pill wait" title="${esc(p.accessError || "Access retrying")}">Access retrying</span>`
+          : "";
+      return `<li><code>rbxassetid://${esc(p.assetId || "pending")}</code>${j.parts.length > 1 ? `<span class="jmeta">Part ${p.index}</span>` : ""}<span class="pill ${ok ? "ok" : declined ? "bad" : "wait"}" title="${esc(p.moderationLabel || label)}">${label}</span>${access}</li>`;
+    }).join("");
     const hasLua = (j.parts || []).some(p => p.status === "approved" || p.status === "accepted");
+    const reviewButton = j.stage === "review" ? `<button class="btn primary sm" data-review>Review & preview</button>` : "";
     return `<li class="job ${j.stage}" data-id="${esc(j.id)}">
-      <div class="jhead"><span class="jtitle">${esc(j.title)}${j.artist ? `<span class="jmeta" style="display:block">${esc(j.artist)}</span>` : ""}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× game · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
+      <div class="jhead"><span class="jtitle">${esc(j.title)}${j.artist ? `<span class="jmeta" style="display:block">${esc(j.artist)}</span>` : ""}</span><span class="jmeta">${Number(j.conversionSpeed || (1 / (j.speed || 1))).toFixed(1)}× convert → ${Number(j.speed || 1).toFixed(6)}× Casa · Vol ${Math.round(Number(j.volume ?? 1) * 100)}% · Air ${Number(j.airEqDb ?? 0).toFixed(1)} dB · ${esc(j.genre)}${j.sub ? " / " + esc(j.sub) : ""}</span></div>
       <div class="stages"><div class="fill" style="width:${fillPct}%"></div>${stages}</div>
       <p class="jnote${bad ? " bad" : ""}">${esc(noteFor(j))}</p>
       ${parts ? `<ul class="parts">${parts}</ul>` : ""}
-      ${hasLua ? `<div class="actions" style="margin-top:10px"><button class="btn ghost sm" data-copyids>Copy asset IDs</button><button class="btn ghost sm" data-copylua>Copy as Lua</button></div>` : ""}
+      ${(hasLua || reviewButton) ? `<div class="actions" style="margin-top:10px">${reviewButton}${hasLua ? `<button class="btn ghost sm" data-copyids>Copy asset IDs</button><button class="btn ghost sm" data-copylua>Copy as Lua</button>` : ""}</div>` : ""}
     </li>`;
   }).join("");
 }
+
+let reviewJobId = null;
+let reviewAudioCtx = null, reviewSource = null, reviewGain = null, reviewShelf = null;
+function ensureReviewAudioGraph(){
+  const audio = $("#reviewAudio");
+  if (!reviewAudioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    reviewAudioCtx = new Ctx();
+    reviewSource = reviewAudioCtx.createMediaElementSource(audio);
+    reviewGain = reviewAudioCtx.createGain();
+    reviewShelf = reviewAudioCtx.createBiquadFilter();
+    reviewShelf.type = "highshelf";
+    reviewShelf.frequency.value = 6000;
+    reviewSource.connect(reviewGain);
+    reviewGain.connect(reviewShelf);
+    reviewShelf.connect(reviewAudioCtx.destination);
+  }
+  if (reviewAudioCtx.state === "suspended") reviewAudioCtx.resume().catch(() => {});
+}
+function applyReviewAudioSettings(){
+  const j = state.jobs.find(x => x.id === reviewJobId); if (!j) return;
+  const f = $("#reviewForm"), audio = $("#reviewAudio");
+  const volume = Number(f.volume.value || j.volume || 1);
+  const airEqDb = Number(f.airEqDb.value || j.airEqDb || 0);
+  audio.playbackRate = Number(j.speed || 1);
+  if ("preservesPitch" in audio) audio.preservesPitch = false;
+  if ("mozPreservesPitch" in audio) audio.mozPreservesPitch = false;
+  if ("webkitPreservesPitch" in audio) audio.webkitPreservesPitch = false;
+  if (reviewGain) {
+    audio.volume = 1;
+    reviewGain.gain.value = volume;
+  } else {
+    audio.volume = Math.max(0, Math.min(1, volume));
+  }
+  if (reviewShelf) reviewShelf.gain.value = airEqDb;
+}
+function setReviewPart(job, partIndex){
+  const part = (job.parts || []).find(p => Number(p.index) === Number(partIndex)) || (job.parts || [])[0];
+  if (!part) return;
+  const audio = $("#reviewAudio");
+  audio.pause();
+  audio.src = `/api/jobs/${encodeURIComponent(job.id)}/preview/${encodeURIComponent(part.index)}?token=${encodeURIComponent(job.previewToken || "")}`;
+  $("#reviewAsset").textContent = part.assetId ? `rbxassetid://${part.assetId}` : "Pending";
+  applyReviewAudioSettings();
+}
+function openReview(job){
+  reviewJobId = job.id;
+  const f = $("#reviewForm");
+  f.title.value = job.title || "";
+  f.artist.value = job.artist || "";
+  f.genre.innerHTML = genreOptions(job.genre);
+  f.sub.innerHTML = subOptions(job.genre, job.sub);
+  f.volume.innerHTML = volumeOptions(job.volume ?? 1);
+  f.airEqDb.innerHTML = airEqOptions(job.airEqDb ?? 0);
+  $("#reviewConversion").textContent = `${Number(job.conversionSpeed || (1 / (job.speed || 1))).toFixed(1)}×`;
+  $("#reviewPlayback").textContent = `${Number(job.speed || 1).toFixed(6)}×`;
+  const parts = (job.parts || []).filter(p => p.previewFile);
+  $("#reviewPartWrap").hidden = parts.length <= 1;
+  $("#reviewPart").innerHTML = parts.map(p => `<option value="${p.index}">Part ${p.index}${p.duration ? ` · ${Number(p.duration).toFixed(0)}s` : ""}</option>`).join("");
+  $("#reviewErr").textContent = "";
+  if (parts.length) setReviewPart(job, parts[0].index);
+  else {
+    $("#reviewAudio").removeAttribute("src");
+    $("#reviewAudio").load();
+    $("#reviewAsset").textContent = "Preview unavailable";
+  }
+  $("#reviewDlg").showModal();
+}
+async function saveReviewSettings(){
+  const job = state.jobs.find(x => x.id === reviewJobId); if (!job) throw new Error("Review job disappeared.");
+  const f = $("#reviewForm");
+  const body = {
+    title: f.title.value.trim(),
+    artist: f.artist.value.trim(),
+    genre: f.genre.value,
+    sub: f.sub.value,
+    volume: Number(f.volume.value),
+    airEqDb: Number(f.airEqDb.value)
+  };
+  if (!body.title) throw new Error("Title can't be empty.");
+  if (!body.artist) throw new Error("Artist can't be empty.");
+  if (!validVolume(body.volume)) throw new Error("Choose a valid Casa volume.");
+  if (!validAirEq(body.airEqDb)) throw new Error("Choose a valid Air EQ value.");
+  const { job: updated } = await api(`/api/jobs/${encodeURIComponent(job.id)}/review`, { method: "PATCH", body: JSON.stringify(body) });
+  Object.assign(job, updated || body);
+  await refreshJobs();
+  return job;
+}
+$("#reviewAudio").addEventListener("play", () => { ensureReviewAudioGraph(); applyReviewAudioSettings(); });
+$("#reviewForm").volume.addEventListener("change", applyReviewAudioSettings);
+$("#reviewForm").airEqDb.addEventListener("change", applyReviewAudioSettings);
+$("#reviewForm").genre.addEventListener("change", e => { $("#reviewForm").sub.innerHTML = subOptions(e.target.value, ""); });
+$("#reviewPart").addEventListener("change", e => { const j = state.jobs.find(x => x.id === reviewJobId); if (j) setReviewPart(j, Number(e.target.value)); });
+$("#reviewSave").addEventListener("click", async () => {
+  $("#reviewErr").textContent = "";
+  try { await saveReviewSettings(); toast("Review settings saved"); }
+  catch (err) { $("#reviewErr").textContent = err.message; }
+});
+$("#reviewProceed").addEventListener("click", async () => {
+  $("#reviewErr").textContent = "";
+  try {
+    const job = await saveReviewSettings();
+    await api(`/api/jobs/${encodeURIComponent(job.id)}/proceed`, { method: "POST" });
+    $("#reviewAudio").pause();
+    $("#reviewDlg").close();
+    toast("Proceeding to Casa access");
+    await refreshJobs();
+    schedulePoll();
+  } catch (err) { $("#reviewErr").textContent = err.message; }
+});
+$("#reviewDiscard").addEventListener("click", async () => {
+  const job = state.jobs.find(x => x.id === reviewJobId); if (!job) return;
+  if (!confirm(`Discard "${job.title}"? The Roblox audio asset stays in WAN MUSIC COMMUNITY, but it will not be added to Casa.`)) return;
+  try {
+    await api(`/api/jobs/${encodeURIComponent(job.id)}/discard`, { method: "POST" });
+    $("#reviewAudio").pause();
+    $("#reviewDlg").close();
+    toast("Upload discarded");
+    await refreshJobs();
+  } catch (err) { $("#reviewErr").textContent = err.message; }
+});
+$("#reviewDlg").addEventListener("close", () => { $("#reviewAudio").pause(); reviewJobId = null; });
+
 $("#queue").addEventListener("click", e => {
   const li = e.target.closest(".job"); if (!li) return; const j = state.jobs.find(x => x.id === li.dataset.id); if (!j) return;
+  if (e.target.closest("[data-review]")) openReview(j);
   if (e.target.closest("[data-copyids]")) copy(j.parts.filter(p => p.status === "approved" || p.status === "accepted").map(p => p.assetId).join("\n"), "Asset IDs copied");
   if (e.target.closest("[data-copylua]")) copy(luaFor(j), "Lua entries copied");
 });
@@ -561,9 +844,10 @@ async function refreshJobs(){
 }
 function schedulePoll(){
   clearTimeout(pollTimer);
-  const busy = state.jobs.some(j => !FINAL.has(j.stage));
-  pollTimer = setTimeout(async () => { await refreshJobs(); schedulePoll(); }, busy ? 2500 : 15000);
+  const busy = state.jobs.some(j => !FINAL.has(j.stage) && j.stage !== "review");
+  pollTimer = setTimeout(async () => { await refreshJobs(); schedulePoll(); }, busy ? 2500 : 10000);
 }
+
 
 /* ---------- library ---------- */
 async function refreshLibrary(){
@@ -581,13 +865,15 @@ function renderLibrary(){
   if (!state.library.length) { $("#libBody").innerHTML = `<div class="empty">No songs added from the website yet. Upload one from Add songs and it appears here only after Roblox reports moderation approval.</div>`; return; }
   if (!rows.length) { $("#libBody").innerHTML = `<div class="empty">Nothing matches that search.</div>`; return; }
   $("#libBody").innerHTML = `<div class="tablewrap"><table>
-    <thead><tr><th>Title</th><th>Artist</th><th>Genre</th><th>Convert</th><th>In-game</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
+    <thead><tr><th>Title</th><th>Artist</th><th>Genre</th><th>Convert</th><th>Playback</th><th>Volume</th><th>Air EQ</th><th>Asset IDs</th><th><span class="sr">Actions</span></th></tr></thead>
     <tbody>${rows.map(s => `<tr data-id="${esc(s.id)}">
       <td class="t">${esc(s.title)}</td>
       <td>${esc(s.artist || "Unknown Artist")}</td>
       <td class="g">${esc(s.genre)}${s.sub ? " / " + esc(s.sub) : ""}</td>
       <td>${Number(s.conversionSpeed || (1 / Number(s.speed || 1))).toFixed(1)}×</td>
       <td>${Number(s.speed).toFixed(6)}×</td>
+      <td>${Math.round(Number(s.volume ?? 1) * 100)}%</td>
+      <td>${Number(s.airEqDb ?? 0).toFixed(1)} dB</td>
       <td class="ids">${(s.assetIds || []).map(id => `<code>${esc(id)}</code>`).join("<br>")}</td>
       <td class="act"><button class="btn ghost sm" data-edit>Edit</button> <button class="btn ghost sm" data-del>Remove</button></td>
     </tr>`).join("")}</tbody></table></div>`;
@@ -606,7 +892,7 @@ $("#libBody").addEventListener("click", async e => {
   }
   if (e.target.closest("[data-edit]")) {
     editing = song; const f = $("#editForm");
-    f.title.value = song.title; f.artist.value = song.artist || ""; f.genre.innerHTML = genreOptions(song.genre); f.sub.innerHTML = subOptions(song.genre, song.sub); f.speed.value = song.speed;
+    f.title.value = song.title; f.artist.value = song.artist || ""; f.genre.innerHTML = genreOptions(song.genre); f.sub.innerHTML = subOptions(song.genre, song.sub); f.speed.value = song.speed; f.volume.innerHTML = volumeOptions(song.volume ?? 1); f.airEqDb.innerHTML = airEqOptions(song.airEqDb ?? 0);
     $("#editErr").textContent = ""; $("#editDlg").showModal();
   }
 });
@@ -614,10 +900,12 @@ $("#editForm").genre.addEventListener("change", e => { $("#editForm").sub.innerH
 $("#editForm").addEventListener("submit", async e => {
   if (e.submitter?.value !== "save") return;
   e.preventDefault();
-  const f = e.target, body = { title: f.title.value.trim(), artist: f.artist.value.trim(), genre: f.genre.value, sub: f.sub.value, speed: Number(f.speed.value) };
+  const f = e.target, body = { title: f.title.value.trim(), artist: f.artist.value.trim(), genre: f.genre.value, sub: f.sub.value, speed: Number(f.speed.value), volume: Number(f.volume.value), airEqDb: Number(f.airEqDb.value) };
   if (!body.title) { $("#editErr").textContent = "Title can't be empty."; return; }
   if (!body.artist) { $("#editErr").textContent = "Artist can't be empty."; return; }
   if (!validSpeed(body.speed)) { $("#editErr").textContent = "In-game playback speed must be between 0.01 and 2."; return; }
+  if (!validVolume(body.volume)) { $("#editErr").textContent = "Choose a valid Casa volume."; return; }
+  if (!validAirEq(body.airEqDb)) { $("#editErr").textContent = "Choose a valid Air EQ value."; return; }
   try { await api("/api/library/" + encodeURIComponent(editing.id), { method: "PATCH", body: JSON.stringify(body) }); $("#editDlg").close(); toast("Changes saved"); refreshLibrary(); }
   catch (err) { $("#editErr").textContent = err.message; }
 });

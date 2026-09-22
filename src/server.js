@@ -25,7 +25,45 @@ await Promise.all([
 
 const store = new JsonStore(dataFile);
 await store.load();
-const roblox = new RobloxClient(process.env);
+
+const DEFAULT_UPLOADER_ID = 'wan';
+const uploaderProfiles = new Map([
+  ['wan', {
+    id: 'wan',
+    name: 'WAN',
+    creatorId: String(process.env.ROBLOX_CREATOR_ID || '').trim(),
+    creatorType: String(process.env.ROBLOX_CREATOR_TYPE || 'group').trim() || 'group',
+    client: new RobloxClient(process.env)
+  }],
+  ['wan2', {
+    id: 'wan2',
+    name: 'WAN 2ND',
+    creatorId: String(process.env.ROBLOX_CREATOR_ID_WAN2 || '').trim(),
+    creatorType: String(process.env.ROBLOX_CREATOR_TYPE_WAN2 || 'group').trim() || 'group',
+    client: new RobloxClient({
+      ...process.env,
+      ROBLOX_API_KEY: process.env.ROBLOX_API_KEY_WAN2 || '',
+      ROBLOX_CREATOR_ID: process.env.ROBLOX_CREATOR_ID_WAN2 || '',
+      ROBLOX_CREATOR_TYPE: process.env.ROBLOX_CREATOR_TYPE_WAN2 || 'group'
+    })
+  }]
+]);
+
+function getUploaderProfile(id) {
+  return uploaderProfiles.get(String(id || DEFAULT_UPLOADER_ID).trim()) || uploaderProfiles.get(DEFAULT_UPLOADER_ID);
+}
+function getUploaderClient(job) {
+  return getUploaderProfile(job?.uploaderProfile).client;
+}
+function uploaderPublicInfo() {
+  return [...uploaderProfiles.values()].map(profile => ({
+    id: profile.id,
+    name: profile.name,
+    creatorId: profile.creatorId,
+    creatorType: profile.creatorType,
+    configured: profile.client.configured
+  }));
+}
 
 const GENRES = {
   'West Coast': ['The Hood', 'Pop', 'R&B'],
@@ -96,8 +134,9 @@ app.get('/api/health', (req, res) => {
     presets: PRESETS,
     volumes: VOLUMES,
     airEqDbPresets: AIR_EQ_DB,
-    robloxConfigured: roblox.configured,
-    simulation: roblox.simulate,
+    robloxConfigured: [...uploaderProfiles.values()].some(profile => profile.client.configured),
+    simulation: [...uploaderProfiles.values()].every(profile => profile.client.simulate),
+    uploaders: uploaderPublicInfo(),
     gameSyncConfigured: Boolean(process.env.GAME_SYNC_TOKEN),
     moderationGate: true,
     casaUniverseConfigured: Boolean(process.env.CASA_UNIVERSE_ID),
@@ -162,6 +201,9 @@ app.get('/api/game/library', gameAuth, (req, res) => {
       conversionSpeed: s.conversionSpeed,
       volume: Number.isFinite(Number(s.volume)) ? Number(s.volume) : 1,
       airEqDb: Number.isFinite(Number(s.airEqDb)) ? Number(s.airEqDb) : 0,
+      sourceUploader: s.sourceUploader || 'WAN',
+      sourceUploaderId: s.sourceUploaderId || 'wan',
+      sourceCreatorId: s.sourceCreatorId || '',
       assetIds: s.assetIds,
       addedAt: s.addedAt
     }))
@@ -170,6 +212,18 @@ app.get('/api/game/library', gameAuth, (req, res) => {
 
 app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Choose an audio/video file.' });
+
+  const uploaderProfileId = cleanText(req.body.uploaderProfile, 20) || DEFAULT_UPLOADER_ID;
+  const uploader = uploaderProfiles.get(uploaderProfileId);
+  if (!uploader) {
+    await fs.rm(req.file.path, { force: true }).catch(() => {});
+    return res.status(400).json({ error: 'Unknown upload account.' });
+  }
+  if (!uploader.client.configured) {
+    await fs.rm(req.file.path, { force: true }).catch(() => {});
+    return res.status(400).json({ error: `${uploader.name} is not configured on Railway.` });
+  }
+
   const title = cleanText(req.body.title) || cleanText(req.file.originalname.replace(/\.[^.]+$/, '')) || 'Untitled';
   const artist = cleanText(req.body.artist) || 'Unknown Artist';
   const conversionSpeed = Number(req.body.conversionSpeed);
@@ -185,6 +239,10 @@ app.post('/api/uploads', adminAuth, upload.single('file'), async (req, res) => {
   const job = {
     id: crypto.randomUUID(), title, artist, genre, sub, conversionSpeed,
     speed: inverseSpeed(conversionSpeed), volume, airEqDb, pushToMap,
+    uploaderProfile: uploader.id,
+    uploaderName: uploader.name,
+    uploaderCreatorId: uploader.creatorId,
+    uploaderCreatorType: uploader.creatorType,
     stage: 'processing', parts: [], createdAt: Date.now(), originalName: req.file.originalname,
     moderationGate: true,
     reviewRequired: pushToMap,
@@ -310,6 +368,9 @@ async function addApprovedJobToLibrary(job) {
       conversionSpeed: job.conversionSpeed, speed: job.speed,
       volume: Number.isFinite(Number(job.volume)) ? Number(job.volume) : 1,
       airEqDb: Number.isFinite(Number(job.airEqDb)) ? Number(job.airEqDb) : 0,
+      sourceUploaderId: job.uploaderProfile || DEFAULT_UPLOADER_ID,
+      sourceUploader: job.uploaderName || getUploaderProfile(job.uploaderProfile).name,
+      sourceCreatorId: job.uploaderCreatorId || getUploaderProfile(job.uploaderProfile).creatorId,
       assetIds: job.parts.map(p => p.assetId), addedAt: Date.now(),
       moderationStatus: 'approved',
       accessStatus: 'granted',
@@ -323,6 +384,7 @@ const activeAccessMonitors = new Set();
 async function grantCasaAccess(job) {
   if (!job.pushToMap) return true;
 
+  const roblox = getUploaderClient(job);
   const universeId = String(process.env.CASA_UNIVERSE_ID || '').trim();
   if (!universeId) {
     job.stage = 'access_required';
@@ -414,6 +476,7 @@ async function finalizeDeclinedJob(job) {
 const activeModerationMonitors = new Set();
 async function monitorModeration(job) {
   if (!job?.id || activeModerationMonitors.has(job.id) || job.stage !== 'moderating') return;
+  const roblox = getUploaderClient(job);
   activeModerationMonitors.add(job.id);
   try {
     while (job.stage === 'moderating') {
@@ -463,6 +526,7 @@ async function monitorModeration(job) {
 let worker = Promise.resolve();
 function processJob(job, inputPath) {
   worker = worker.catch(() => {}).then(async () => {
+    const roblox = getUploaderClient(job);
     try {
       job.stage = 'processing'; await store.save();
       const parts = await convertReversibleSpeed({
